@@ -1,60 +1,65 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../utils/supabaseClient'
+// pages/auth.tsx
+'use client'
+import { useState } from 'react'
 import { useRouter } from 'next/router'
+import { supabase } from '../utils/supabaseClient'
 
 export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.push('/dashboard')
-    })
-  }, [])
-
   const handleLogin = async () => {
+    setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
     if (error) alert(error.message)
     else router.push('/dashboard')
   }
 
   const handleSignup = async () => {
+    setLoading(true)
     const { error } = await supabase.auth.signUp({ email, password })
+    setLoading(false)
     if (error) alert(error.message)
-    else alert('Check your email to confirm')
+    else alert('Signup successful! You can now login.')
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-navy text-graylight">
-      <div className="p-6 rounded-lg shadow-lg bg-gray-800 w-80">
-        <h2 className="text-2xl font-bold mb-4 text-yellow">Connexion</h2>
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-100">
+      <div className="p-8 rounded-lg bg-gray-800 shadow-md w-full max-w-md">
+        <h1 className="text-2xl font-bold mb-6 text-yellow-500">Login / Signup</h1>
         <input
-          className="w-full mb-2 p-2 rounded bg-gray-700"
           type="email"
           placeholder="Email"
+          className="w-full p-2 mb-4 rounded bg-gray-700 text-white"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <input
-          className="w-full mb-2 p-2 rounded bg-gray-700"
           type="password"
-          placeholder="Mot de passe"
+          placeholder="Password"
+          className="w-full p-2 mb-4 rounded bg-gray-700 text-white"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        <button
-          onClick={handleLogin}
-          className="w-full bg-yellow p-2 rounded mb-2"
-        >
-          Se connecter
-        </button>
-        <button
-          onClick={handleSignup}
-          className="w-full bg-gray-600 p-2 rounded"
-        >
-          S'inscrire
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={handleLogin}
+            className="flex-1 bg-yellow-600 hover:bg-yellow-700 py-2 rounded font-bold"
+            disabled={loading}
+          >
+            Login
+          </button>
+          <button
+            onClick={handleSignup}
+            className="flex-1 bg-gray-600 hover:bg-gray-700 py-2 rounded font-bold"
+            disabled={loading}
+          >
+            Signup
+          </button>
+        </div>
       </div>
     </div>
   )
