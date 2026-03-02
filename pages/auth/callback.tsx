@@ -8,36 +8,34 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function AuthCallback() {
+export default function Callback() {
   const router = useRouter()
+  const { access_token, refresh_token } = router.query
 
   useEffect(() => {
     const handleAuth = async () => {
-      const hash = window.location.hash
-      const params = new URLSearchParams(hash.replace("#", "?"))
-      const access_token = params.get("access_token")
-      const type = params.get("type")
-      const token = params.get("token") // token d’invitation
+      // Vérifie que les tokens existent
+      if (typeof access_token === "string" && typeof refresh_token === "string") {
+        // Passe les deux tokens à Supabase
+        const { error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        })
 
-      if (type === "invite" && token) {
-        // Redirige automatiquement vers set-password avec le token
-        router.replace(`/auth/set-password?token=${token}`)
-        return
+        if (!error) {
+          router.replace("/dashboard") // Redirection après login
+        } else {
+          console.error(error)
+          router.replace("/auth")
+        }
+      } else {
+        // Pas de tokens, renvoie à la page login
+        router.replace("/auth")
       }
-
-      // Pour les logins classiques avec access_token
-      if (access_token) {
-        await supabase.auth.setSession({ access_token })
-        router.replace("/dashboard")
-        return
-      }
-
-      // Si échec ou URL invalide
-      router.replace("/auth")
     }
 
     handleAuth()
-  }, [router])
+  }, [access_token, refresh_token, router])
 
-  return <p className="text-center mt-10 text-white">Connexion en cours...</p>
+  return <p>Connexion en cours...</p>
 }
