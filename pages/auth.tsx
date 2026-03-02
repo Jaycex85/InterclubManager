@@ -29,7 +29,7 @@ export default function AuthPage() {
     else router.push('/dashboard')
   }
 
-  // Signup (Admin only)
+  // Signup via API Route (Admin only)
   const handleSignup = async () => {
     if (!email || !password || !role || !clubId) {
       setMessage('Tous les champs sont obligatoires')
@@ -38,21 +38,14 @@ export default function AuthPage() {
 
     setLoading(true)
     try {
-      // Crée utilisateur via Supabase admin API
-      const { data: userData, error: userError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true
+      const res = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, role, club_id: clubId })
       })
-      if (userError) throw userError
-
-      // Crée la relation club_membership
-      const { data: membershipData, error: membershipError } = await supabase
-        .from('club_memberships')
-        .insert([{ user_id: userData.id, club_id: clubId, role, joined_at: new Date().toISOString() }])
-      if (membershipError) throw membershipError
-
-      setMessage('Utilisateur créé avec succès !')
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erreur inconnue')
+      setMessage(data.message)
       setEmail('')
       setPassword('')
     } catch (err: any) {
