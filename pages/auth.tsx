@@ -8,6 +8,8 @@ export default function AuthPage() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'club_admin' | 'player'>('player')
+  const [clubId, setClubId] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -29,15 +31,30 @@ export default function AuthPage() {
 
   // Signup (Admin only)
   const handleSignup = async () => {
+    if (!email || !password || !role || !clubId) {
+      setMessage('Tous les champs sont obligatoires')
+      return
+    }
+
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.admin.createUser({
+      // Crée utilisateur via Supabase admin API
+      const { data: userData, error: userError } = await supabase.auth.admin.createUser({
         email,
         password,
         email_confirm: true
       })
-      if (error) setMessage(error.message)
-      else setMessage('Utilisateur créé avec succès !')
+      if (userError) throw userError
+
+      // Crée la relation club_membership
+      const { data: membershipData, error: membershipError } = await supabase
+        .from('club_memberships')
+        .insert([{ user_id: userData.id, club_id: clubId, role, joined_at: new Date().toISOString() }])
+      if (membershipError) throw membershipError
+
+      setMessage('Utilisateur créé avec succès !')
+      setEmail('')
+      setPassword('')
     } catch (err: any) {
       setMessage(err.message)
     }
@@ -71,6 +88,27 @@ export default function AuthPage() {
           className="w-full p-3 rounded mb-3 bg-gray-800 text-gray-100 placeholder-gray-400"
         />
 
+        {authMode === 'signup' && (
+          <>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'club_admin' | 'player')}
+              className="w-full p-3 rounded mb-3 bg-gray-800 text-gray-100 placeholder-gray-400"
+            >
+              <option value="club_admin">Club Admin</option>
+              <option value="player">Player</option>
+            </select>
+
+            <input
+              type="text"
+              placeholder="Club ID"
+              value={clubId}
+              onChange={(e) => setClubId(e.target.value)}
+              className="w-full p-3 rounded mb-3 bg-gray-800 text-gray-100 placeholder-gray-400"
+            />
+          </>
+        )}
+
         {message && <p className="mb-3 text-yellow-400">{message}</p>}
 
         {authMode === 'login' ? (
@@ -91,11 +129,13 @@ export default function AuthPage() {
           </button>
         )}
 
-        <p className="text-gray-400 text-center mt-2 cursor-pointer" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}>
+        <p
+          className="text-gray-400 text-center mt-2 cursor-pointer"
+          onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+        >
           {authMode === 'login' ? "Créer un compte" : "Retourner au login"}
         </p>
 
-        {/* Logout button (visible si session détectée) */}
         {authMode === 'login' && (
           <button
             onClick={handleLogout}
