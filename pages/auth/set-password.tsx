@@ -1,5 +1,4 @@
-"use client"
-
+// pages/auth/set-password.tsx
 import { useState, useEffect } from "react"
 import { useRouter } from "next/router"
 import { createClient } from "@supabase/supabase-js"
@@ -11,54 +10,61 @@ const supabase = createClient(
 
 export default function SetPassword() {
   const router = useRouter()
+  const { token } = router.query // token d'invitation
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const [token, setToken] = useState("")
+  const [errorMsg, setErrorMsg] = useState("")
 
   useEffect(() => {
-    if (router.query.token) {
-      setToken(router.query.token as string)
-    }
-  }, [router.query])
+    if (!token) return
+    // Optionnel : vérifier si token est bien présent
+  }, [token])
 
-  const handleSetPassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    if (!token || !password) return
 
-    // Mise à jour du mot de passe avec le token d’invitation
-    const { error } = await supabase.auth.updateUser({ 
-      password,
-      // Si nécessaire, ajouter le token ici, Supabase le gère automatiquement après invite
+    setLoading(true)
+    setErrorMsg("")
+
+    // Ici on confirme l'invitation et définit le mot de passe
+    const { error } = await supabase.auth.updateUser({
+      password
+    }, {
+      emailChangeToken: token as string // important pour l'invitation
     })
 
     setLoading(false)
 
     if (error) {
-      alert("Erreur : " + error.message)
+      setErrorMsg(error.message)
     } else {
-      alert("Mot de passe défini ! Vous pouvez maintenant vous connecter.")
-      router.push("/auth") // redirige vers login
+      // redirige vers login après succès
+      router.push("/auth")
     }
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-      <form onSubmit={handleSetPassword} className="bg-gray-800 p-6 rounded shadow-md">
-        <h2 className="text-xl mb-4">Définir votre mot de passe</h2>
+      <form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-lg shadow-lg space-y-4 w-full max-w-sm">
+        <h2 className="text-2xl font-bold">Définir votre mot de passe</h2>
+
+        {errorMsg && <p className="text-red-500">{errorMsg}</p>}
+
         <input
           type="password"
           placeholder="Nouveau mot de passe"
+          className="w-full p-2 rounded bg-gray-700 text-white"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="p-2 mb-4 w-full rounded text-black"
-          required
         />
+
         <button
           type="submit"
+          className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-2 rounded"
           disabled={loading}
-          className="bg-yellow-500 p-2 rounded w-full text-black font-bold"
         >
-          {loading ? "Chargement..." : "Définir le mot de passe"}
+          {loading ? "En cours..." : "Valider le mot de passe"}
         </button>
       </form>
     </div>
