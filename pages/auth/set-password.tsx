@@ -10,17 +10,12 @@ const supabase = createClient(
 
 export default function SetPassword() {
   const router = useRouter()
-  const { token } = router.query // token envoyé par Supabase dans le lien d'invitation
+  const { token } = router.query // token envoyé par Supabase
 
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    if (!token) return
-    // On pourrait vérifier le token ici si besoin
-  }, [token])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,9 +27,11 @@ export default function SetPassword() {
     setLoading(true)
     setError(null)
 
-    const { error: updateError } = await supabase.auth.updateUser({
-      password
-    }, token) // ici le token d'invitation/email
+    // On utilise updateUser avec l'objet { password } ET le token via emailRedirectTo
+    const { data, error: updateError } = await supabase.auth.updateUser(
+      { password },
+      { emailRedirectTo: `https://interclub-manager.vercel.app/auth` }
+    )
 
     setLoading(false)
 
@@ -45,7 +42,7 @@ export default function SetPassword() {
 
     setSuccess(true)
     // Redirige vers login
-    router.push("/auth")
+    setTimeout(() => router.push("/auth"), 2000)
   }
 
   return (
