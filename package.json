@@ -1,18 +1,21 @@
 {
-  "dependencies": {
-    "@supabase/supabase-js": "^2.0.0",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "next": "^13.0.0"
-  },
-  "devDependencies": {
-    "tailwindcss": "^3.3.0",
-    "postcss": "^8.4.0",
-    "autoprefixer": "^10.4.0"
-  },
+  "name": "padel-app",
+  "version": "1.0.0",
+  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
+  },
+  "dependencies": {
+    "next": "^13.5.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@supabase/supabase-js": "^2.31.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.2",
+    "postcss": "^8.4.28",
+    "autoprefixer": "^10.4.24"
   }
 }
