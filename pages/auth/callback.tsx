@@ -7,17 +7,25 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function AuthCallback() {
+export default function Callback() {
   const router = useRouter()
 
   useEffect(() => {
     const handleAuth = async () => {
-      const { error } = await supabase.auth.getSession()
+      const token = router.query.token as string
+      const type = router.query.type as string
 
-      if (!error) {
-        router.push("/dashboard") // ou "/" si tu préfères
+      if (type === "invite" && token) {
+        // Lien d’invitation → redirige vers set-password
+        router.push(`/auth/set-password?token=${token}`)
       } else {
-        router.push("/auth")
+        // Session normale
+        const { error } = await supabase.auth.getSession()
+        if (!error) {
+          router.push("/dashboard")
+        } else {
+          router.push("/auth")
+        }
       }
     }
 
