@@ -1,7 +1,11 @@
 import '../styles/globals.css'
-import { AppProps } from 'next/app'
+import { SessionContextProvider } from '@supabase/auth-helpers-react'
+import { supabase } from '../utils/supabaseClient'
 
-export default function App({ Component, pageProps }: AppProps) {
-  return <Component {...pageProps} />
+export default function App({ Component, pageProps }) {
+  return (
+    <SessionContextProvider supabaseClient={supabase}>
+      <Component {...pageProps} />
+    </SessionContextProvider>
+  )
 }
- 
