@@ -1,16 +1,15 @@
-import { useEffect } from 'react'
-import { useRouter } from 'next/router'
+// pages/index.tsx
+import { GetServerSideProps } from 'next'
 
 export default function Home() {
-  const router = useRouter()
+  return null // rien à afficher, la redirection se fait côté serveur
+}
 
-  useEffect(() => {
-    router.replace('/auth') // redirige vers page login/signup
-  }, [router])
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-gray-100">
-      <p>Redirection...</p>
-    </div>
-  )
+export const getServerSideProps: GetServerSideProps = async () => {
+  return {
+    redirect: {
+      destination: '/auth',
+      permanent: false, // non permanent, pour pouvoir changer la destination plus tard
+    },
+  }
 }
