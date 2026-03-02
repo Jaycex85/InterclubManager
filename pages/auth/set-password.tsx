@@ -10,35 +10,28 @@ const supabase = createClient(
 
 export default function SetPassword() {
   const router = useRouter()
-  const { access_token } = router.query // token envoyé par Supabase
-
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    if (!access_token) return
-    if (typeof access_token !== "string") {
-      setError("Token invalide")
-    }
-  }, [access_token])
+    // Optionnel : tu peux récupérer le token avec supabase.auth.getSessionFromUrl()
+    // pour vérifier l'utilisateur invité
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!access_token || typeof access_token !== "string") {
-      setError("Token invalide")
+    if (!password) {
+      setError("Veuillez saisir un mot de passe")
       return
     }
 
     setLoading(true)
     setError(null)
 
-    // Met à jour le mot de passe avec le token d'invitation
-    const { error: updateError } = await supabase.auth.updateUser(
-      { password },
-      { access_token } // obligatoire pour que Supabase accepte le token
-    )
+    // ⚠ Ici : on ne passe PAS access_token
+    const { error: updateError } = await supabase.auth.updateUser({ password })
 
     setLoading(false)
 
@@ -48,8 +41,6 @@ export default function SetPassword() {
     }
 
     setSuccess(true)
-
-    // Redirige vers login après succès
     setTimeout(() => router.push("/auth"), 2000)
   }
 
