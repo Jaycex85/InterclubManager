@@ -1,40 +1,30 @@
-import type { NextApiRequest, NextApiResponse } from 'next' 
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import type { NextApiRequest, NextApiResponse } from 'next'
+import { supabase } from '../../utils/supabaseClient'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
+  const { email, password, club_id, role } = req.body
 
-  const { email, password, role, club_id } = req.body
+  // Vérifie si le user connecté est club_admin
+  const { data: session } = await supabase.auth.getSession()
+  const userId = session?.session?.user?.id
+  const { data: membership } = await supabase
+    .from('club_memberships')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('club_id', club_id)
+    .single()
 
-  if (!email || !password || !role || !club_id) {
-    return res.status(400).json({ error: 'Tous les champs sont obligatoires' })
-  }
+  if (!membership || membership.role !== 'club_admin') return res.status(403).json({ error: 'Forbidden' })
 
-  try {
-    // Créer l'utilisateur
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    })
-    if (error) throw error
-    if (!data.user) throw new Error('User creation failed') // <-- vérifier si user existe
+  const { data, error } = await supabase.auth.admin.createUser({ email, password })
+  if (error) return res.status(400).json({ error: error.message })
 
-    const userId = data.user.id
+  await supabase.from('club_memberships').insert({
+    user_id: data.user?.id,
+    club_id,
+    role
+  })
 
-    // Ajouter membership
-    const { error: membershipError } = await supabaseAdmin
-      .from('club_memberships')
-      .insert([{ user_id: userId, club_id, role, joined_at: new Date().toISOString() }])
-    if (membershipError) throw membershipError
-
-    return res.status(200).json({ message: 'Utilisateur créé avec succès !' })
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message })
-  }
+  res.status(200).json({ user: data.user })
 }
