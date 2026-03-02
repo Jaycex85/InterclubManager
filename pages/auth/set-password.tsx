@@ -17,6 +17,13 @@ export default function SetPassword() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
+  useEffect(() => {
+    if (!access_token) return
+    if (typeof access_token !== "string") {
+      setError("Token invalide")
+    }
+  }, [access_token])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!access_token || typeof access_token !== "string") {
@@ -27,10 +34,10 @@ export default function SetPassword() {
     setLoading(true)
     setError(null)
 
-    // Définit le mot de passe en utilisant l'access_token fourni dans l'URL
+    // Met à jour le mot de passe avec le token d'invitation
     const { error: updateError } = await supabase.auth.updateUser(
       { password },
-      { emailRedirectTo: "https://interclub-manager.vercel.app/auth" }
+      { access_token } // obligatoire pour que Supabase accepte le token
     )
 
     setLoading(false)
@@ -41,6 +48,8 @@ export default function SetPassword() {
     }
 
     setSuccess(true)
+
+    // Redirige vers login après succès
     setTimeout(() => router.push("/auth"), 2000)
   }
 
@@ -48,8 +57,10 @@ export default function SetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
       <div className="bg-gray-800 p-8 rounded-md shadow-md w-full max-w-md">
         <h1 className="text-2xl mb-4">Définir votre mot de passe</h1>
+
         {error && <p className="text-red-400 mb-4">{error}</p>}
         {success && <p className="text-green-400 mb-4">Mot de passe défini avec succès ! Redirection...</p>}
+
         {!success && (
           <form onSubmit={handleSubmit}>
             <input
