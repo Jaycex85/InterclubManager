@@ -1,24 +1,17 @@
 {
-  "name": "padel-app",
+  "name": "interclub-manager",
   "version": "1.0.0",
-  "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "next": "^13.5.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@supabase/supabase-js": "^2.31.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.2.2",
-    "@types/react": "^18.2.21",
-    "@types/node": "^20.4.2",
-    "tailwindcss": "^3.3.2",
-    "postcss": "^8.4.28",
-    "autoprefixer": "^10.4.24"
+    "next": "13.5.11",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "tailwindcss": "3.3.3",
+    "@supabase/supabase-js": "2.33.1",
+    "@supabase/auth-helpers-react": "1.3.2"
   }
 }
