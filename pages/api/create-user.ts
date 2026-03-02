@@ -1,10 +1,9 @@
-// pages/api/create-user.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // cle service role
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,17 +17,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     // Créer l'utilisateur
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.createUser({
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true
     })
-    if (userError) throw userError
+    if (error) throw error
+    if (!data.user) throw new Error('User creation failed') // <-- vérifier si user existe
+
+    const userId = data.user.id
 
     // Ajouter membership
     const { error: membershipError } = await supabaseAdmin
       .from('club_memberships')
-      .insert([{ user_id: userData.id, club_id, role, joined_at: new Date().toISOString() }])
+      .insert([{ user_id: userId, club_id, role, joined_at: new Date().toISOString() }])
     if (membershipError) throw membershipError
 
     return res.status(200).json({ message: 'Utilisateur créé avec succès !' })
