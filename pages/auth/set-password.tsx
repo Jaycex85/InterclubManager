@@ -10,7 +10,7 @@ const supabase = createClient(
 
 export default function SetPassword() {
   const router = useRouter()
-  const { token } = router.query // token envoyé par Supabase
+  const { access_token } = router.query // token envoyé par Supabase
 
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -19,7 +19,7 @@ export default function SetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!token || typeof token !== "string") {
+    if (!access_token || typeof access_token !== "string") {
       setError("Token invalide")
       return
     }
@@ -27,10 +27,10 @@ export default function SetPassword() {
     setLoading(true)
     setError(null)
 
-    // On utilise updateUser avec l'objet { password } ET le token via emailRedirectTo
-    const { data, error: updateError } = await supabase.auth.updateUser(
+    // Définit le mot de passe en utilisant l'access_token fourni dans l'URL
+    const { error: updateError } = await supabase.auth.updateUser(
       { password },
-      { emailRedirectTo: `https://interclub-manager.vercel.app/auth` }
+      { emailRedirectTo: "https://interclub-manager.vercel.app/auth" }
     )
 
     setLoading(false)
@@ -41,7 +41,6 @@ export default function SetPassword() {
     }
 
     setSuccess(true)
-    // Redirige vers login
     setTimeout(() => router.push("/auth"), 2000)
   }
 
