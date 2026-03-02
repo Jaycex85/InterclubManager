@@ -1,54 +1,68 @@
-// pages/index.tsx
-import { useEffect, useState } from "react"
-import { useRouter } from "next/router"
-import { createClient } from "@supabase/supabase-js"
+// pages/dashboard/index.tsx
+import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+);
 
-export default function Home() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
+export default function DashboardRedirect() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkUser = async () => {
-      // Récupère la session active
-      const { data: { session }, error } = await supabase.auth.getSession()
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-      if (error || !session) {
-        // Pas de session → login
-        router.replace("/auth")
-        return
+      if (sessionError) {
+        console.log("Erreur récupération session :", sessionError);
+        router.push("/auth");
+        return;
       }
 
-      // Récupère l'utilisateur dans la table users
-      const { data: userData, error: userError } = await supabase
+      if (!session?.user) {
+        console.log("Pas de session user");
+        router.push("/auth");
+        return;
+      }
+
+      console.log("Session OK :", session.user);
+
+      // Récupère le profil dans la table users
+      const { data: userProfile, error: profileError } = await supabase
         .from("users")
-        .select("role")
+        .select("*")
         .eq("auth_id", session.user.id)
-        .single()
+        .single();
 
-      if (userError || !userData) {
-        router.replace("/auth")
-        return
+      if (profileError || !userProfile) {
+        console.log("Erreur profil ou profil introuvable :", profileError);
+        router.push("/auth");
+        return;
       }
 
-      // Redirige selon le rôle
-      if (userData.role === "admin") {
-        router.replace("/dashboard/admin/clubs")
-      } else if (userData.role === "club_admin") {
-        router.replace("/dashboard/responsable/equipes")
-      } else if (userData.role === "player") {
-        router.replace("/dashboard/player")
+      console.log("Profil trouvé :", userProfile);
+
+      // Redirection selon rôle
+      if (userProfile.role === "admin") {
+        router.push("/dashboard/admin/clubs");
+      } else if (userProfile.role === "club_admin") {
+        router.push("/dashboard/responsable/equipes");
+      } else if (userProfile.role === "player") {
+        router.push("/dashboard/player/home");
       } else {
-        router.replace("/auth") // rôle inconnu
+        console.log("Rôle inconnu :", userProfile.role);
+        router.push("/auth");
       }
-    }
+    };
 
-    checkUser()
-  }, [router])
+    checkUser().finally(() => setLoading(false));
+  }, [router]);
 
-  return <p>Chargement...</p>
+  return <p>{loading ? "Vérification de votre session..." : null}</p>;
 }
