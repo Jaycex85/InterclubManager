@@ -13,23 +13,17 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      const session = data.session
+    const checkUser = async () => {
+      // Récupère la session active
+      const { data: { session }, error } = await supabase.auth.getSession()
 
-      if (error) {
-        console.error("Erreur lors de la récupération de la session :", error.message)
+      if (error || !session) {
+        // Pas de session → login
         router.replace("/auth")
         return
       }
 
-      if (!session) {
-        // Pas de session => login
-        router.replace("/auth")
-        return
-      }
-
-      // Session existante, récupère le rôle depuis votre table "users"
+      // Récupère l'utilisateur dans la table users
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("role")
@@ -37,29 +31,24 @@ export default function Home() {
         .single()
 
       if (userError || !userData) {
-        console.error("Impossible de récupérer le rôle de l'utilisateur :", userError?.message)
         router.replace("/auth")
         return
       }
 
-      // Redirection selon le rôle
-      switch (userData.role) {
-        case "admin":
-          router.replace("/dashboard/admin/clubs")
-          break
-        case "club_admin":
-          router.replace("/dashboard/responsable/equipes")
-          break
-        case "player":
-          router.replace("/dashboard/player") // à créer si besoin
-          break
-        default:
-          router.replace("/auth")
+      // Redirige selon le rôle
+      if (userData.role === "admin") {
+        router.replace("/dashboard/admin/clubs")
+      } else if (userData.role === "club_admin") {
+        router.replace("/dashboard/responsable/equipes")
+      } else if (userData.role === "player") {
+        router.replace("/dashboard/player")
+      } else {
+        router.replace("/auth") // rôle inconnu
       }
     }
 
-    checkSession()
+    checkUser()
   }, [router])
 
-  return <p className="text-center mt-10">Vérification de la session...</p>
+  return <p>Chargement...</p>
 }
