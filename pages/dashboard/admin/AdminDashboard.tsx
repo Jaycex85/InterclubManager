@@ -35,24 +35,20 @@ type User = {
 }
 
 export default function AdminDashboard() {
-  // Panels ouverts
+  /** ---------- PANEL STATE ---------- */
   const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
-
-  // Refs pour scroll
   const panelRefs = {
     clubs: useRef<HTMLDivElement>(null),
     teams: useRef<HTMLDivElement>(null),
     users: useRef<HTMLDivElement>(null),
   }
 
-  // Toggle panel
   const togglePanel = (panel: PanelKey) => {
     setOpenPanels(prev =>
       prev.includes(panel) ? prev.filter(p => p !== panel) : [...prev, panel]
     )
   }
 
-  // Scroll vers panel ouvert
   useEffect(() => {
     openPanels.forEach(panel => {
       const ref = panelRefs[panel].current
@@ -174,7 +170,10 @@ export default function AdminDashboard() {
                         </button>
                         {openClubId === club.id && (
                           <div className="p-2 bg-gray-600">
-                            <ClubForm id={club.id} onSaved={() => fetchClubs()} />
+                            <ClubForm
+                              clubId={club.id} // <-- correct prop
+                              onSaved={() => fetchClubs()}
+                            />
                           </div>
                         )}
                       </div>
@@ -189,11 +188,15 @@ export default function AdminDashboard() {
                             setOpenTeamId(openTeamId === team.id ? null : team.id)
                           }
                         >
-                          {team.name} - {team.club_name}{team.category ? ` - ${team.category}` : ''}
+                          {team.name} - {team.club_name}
+                          {team.category ? ` - ${team.category}` : ''}
                         </button>
                         {openTeamId === team.id && (
                           <div className="p-2 bg-gray-600">
-                            <TeamForm id={team.id} onSaved={() => fetchTeams()} />
+                            <TeamForm
+                              teamId={team.id} // <-- correct prop
+                              onSaved={() => fetchTeams()}
+                            />
                           </div>
                         )}
                       </div>
@@ -213,7 +216,7 @@ export default function AdminDashboard() {
                         {openUserId === user.id && (
                           <div className="p-2 bg-gray-600">
                             <EditUser
-                              userId={user.id}
+                              userId={user.id} // <-- correct prop
                               onSaved={() => {
                                 fetchUsers()
                                 setOpenUserId(null)
