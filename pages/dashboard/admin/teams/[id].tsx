@@ -9,7 +9,7 @@ type Team = {
   name: string
   club_id: string
   category?: string
-  captain?: string
+  captain_id?: string
 }
 
 type Club = {
@@ -17,14 +17,19 @@ type Club = {
   name: string
 }
 
+type User = {
+  id: string
+  email: string
+}
+
 export default function TeamFormPage({ params }: { params: { id: string } }) {
-  const [team, setTeam] = useState<Team>({ name: '', club_id: '', category: '', captain: '' })
+  const [team, setTeam] = useState<Team>({ name: '', club_id: '', category: '', captain_id: '' })
   const [clubs, setClubs] = useState<Club[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const isNew = params.id === 'new'
 
-  // Vérifie admin
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -40,16 +45,20 @@ export default function TeamFormPage({ params }: { params: { id: string } }) {
     checkUser()
   }, [router])
 
-  // Récupère clubs pour dropdown
   useEffect(() => {
     const fetchClubs = async () => {
       const { data } = await supabase.from('clubs').select('id, name').order('name')
       if (data) setClubs(data)
     }
     fetchClubs()
+
+    const fetchUsers = async () => {
+      const { data } = await supabase.from('users').select('id, email').order('email')
+      if (data) setUsers(data)
+    }
+    fetchUsers()
   }, [])
 
-  // Si édition, fetch équipe existante
   useEffect(() => {
     if (!isNew) {
       const fetchTeam = async () => {
@@ -129,13 +138,19 @@ export default function TeamFormPage({ params }: { params: { id: string } }) {
 
         <div>
           <label className="block mb-1">Capitaine</label>
-          <input
-            type="text"
-            name="captain"
-            value={team.captain || ''}
+          <select
+            name="captain_id"
+            value={team.captain_id || ''}
             onChange={handleChange}
             className="w-full p-2 rounded bg-gray-800 text-white"
-          />
+          >
+            <option value="">Sélectionner un capitaine</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.email}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button
