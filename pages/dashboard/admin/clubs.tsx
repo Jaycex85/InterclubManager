@@ -31,7 +31,6 @@ export default function AdminClubsPage() {
         return
       }
 
-      // Vérification simple du role (à compléter selon ta table users)
       const { data: profile } = await supabase
         .from('users')
         .select('role')
@@ -43,20 +42,37 @@ export default function AdminClubsPage() {
   }, [router])
 
   // Récupère la liste des clubs
+  const fetchClubs = async () => {
+    setLoading(true)
+    const { data, error } = await supabase.from('clubs').select('*').order('name')
+    if (error) console.error('Error fetching clubs:', error)
+    else setClubs(data)
+    setLoading(false)
+  }
+
   useEffect(() => {
-    const fetchClubs = async () => {
-      setLoading(true)
-      const { data, error } = await supabase.from('clubs').select('*').order('name')
-      if (error) console.error('Error fetching clubs:', error)
-      else setClubs(data)
-      setLoading(false)
-    }
     fetchClubs()
   }, [])
 
+  // Supprimer un club
+  const handleDelete = async (id: string) => {
+    if (!confirm('Voulez-vous vraiment supprimer ce club ?')) return
+    const { error } = await supabase.from('clubs').delete().eq('id', id)
+    if (error) alert(error.message)
+    else fetchClubs()
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
-      <h1 className="text-3xl font-bold text-yellow-500 mb-6">Gestion des Clubs</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-yellow-500">Gestion des Clubs</h1>
+        <button
+          onClick={() => router.push('/dashboard/admin/clubs/new')}
+          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
+        >
+          Ajouter un club
+        </button>
+      </div>
 
       {loading ? (
         <p>Chargement des clubs...</p>
@@ -73,12 +89,20 @@ export default function AdminClubsPage() {
                 <p className="font-bold text-lg">{club.name}</p>
                 <p className="text-gray-400 text-sm">{club.city}</p>
               </div>
-              <button
-                className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
-                onClick={() => router.push(`/dashboard/admin/clubs/${club.id}`)}
-              >
-                Voir / Éditer
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
+                  onClick={() => router.push(`/dashboard/admin/clubs/${club.id}`)}
+                >
+                  Voir / Éditer
+                </button>
+                <button
+                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                  onClick={() => handleDelete(club.id)}
+                >
+                  Supprimer
+                </button>
+              </div>
             </li>
           ))}
         </ul>
