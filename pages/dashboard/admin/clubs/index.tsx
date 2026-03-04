@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../../utils/supabaseClient'
 import { useRouter } from 'next/router'
+import { supabase } from '../../../../utils/supabaseClient'
 
 type Club = {
   id: string
@@ -67,7 +67,7 @@ export default function AdminClubsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-yellow-500">Gestion des Clubs</h1>
         <button
-          onClick={() => router.push('/dashboard/admin/new')}
+          onClick={() => router.push('/dashboard/admin/clubs/new')}
           className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
         >
           Ajouter un club
