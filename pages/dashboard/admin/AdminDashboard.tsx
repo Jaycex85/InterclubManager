@@ -35,8 +35,12 @@ type User = {
 }
 
 export default function AdminDashboard() {
-  /** ---------- PANEL STATE ---------- */
+  /** ---------- PANEL STATES ---------- */
   const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
+  const [openClubId, setOpenClubId] = useState<string | null>(null)
+  const [openTeamId, setOpenTeamId] = useState<string | null>(null)
+  const [openUserId, setOpenUserId] = useState<string | null>(null)
+
   const panelRefs = {
     clubs: useRef<HTMLDivElement>(null),
     teams: useRef<HTMLDivElement>(null),
@@ -69,10 +73,6 @@ export default function AdminDashboard() {
   const [clubs, setClubs] = useState<Club[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [users, setUsers] = useState<User[]>([])
-
-  const [openClubId, setOpenClubId] = useState<string | null>(null)
-  const [openTeamId, setOpenTeamId] = useState<string | null>(null)
-  const [openUserId, setOpenUserId] = useState<string | null>(null)
 
   /** ---------- FETCH FUNCTIONS ---------- */
   const fetchClubs = async () => {
@@ -121,7 +121,7 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
-  /** ---------- PANELS ---------- */
+  /** ---------- PANELS CONFIG ---------- */
   const panels: { key: PanelKey; label: string; color: string }[] = [
     { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
     { key: 'teams', label: 'Teams', color: 'bg-green-500 hover:bg-green-600' },
@@ -155,8 +155,13 @@ export default function AdminDashboard() {
                 </span>
               </button>
 
-              <div ref={ref} style={style} className="overflow-hidden mt-2 bg-gray-800 rounded shadow">
+              <div
+                ref={ref}
+                style={style}
+                className="overflow-hidden mt-2 bg-gray-800 rounded shadow"
+              >
                 <div className="p-4 md:p-6">
+                  {/* ---------- CLUBS ---------- */}
                   {key === 'clubs' &&
                     clubs.map(club => (
                       <div key={club.id} className="mb-4 border-b border-gray-600">
@@ -171,14 +176,19 @@ export default function AdminDashboard() {
                         {openClubId === club.id && (
                           <div className="p-2 bg-gray-600">
                             <ClubForm
-                              clubId={club.id} // <-- correct prop
-                              onSaved={() => fetchClubs()}
+                              clubId={club.id}
+                              onSaved={async () => {
+                                await fetchClubs()
+                                setOpenClubId(null)
+                              }}
+                              onClose={() => setOpenClubId(null)}
                             />
                           </div>
                         )}
                       </div>
                     ))}
 
+                  {/* ---------- TEAMS ---------- */}
                   {key === 'teams' &&
                     teams.map(team => (
                       <div key={team.id} className="mb-4 border-b border-gray-600">
@@ -194,14 +204,19 @@ export default function AdminDashboard() {
                         {openTeamId === team.id && (
                           <div className="p-2 bg-gray-600">
                             <TeamForm
-                              teamId={team.id} // <-- correct prop
-                              onSaved={() => fetchTeams()}
+                              teamId={team.id}
+                              onSaved={async () => {
+                                await fetchTeams()
+                                setOpenTeamId(null)
+                              }}
+                              onClose={() => setOpenTeamId(null)}
                             />
                           </div>
                         )}
                       </div>
                     ))}
 
+                  {/* ---------- USERS ---------- */}
                   {key === 'users' &&
                     users.map(user => (
                       <div key={user.id} className="mb-4 border-b border-gray-600">
@@ -211,16 +226,20 @@ export default function AdminDashboard() {
                             setOpenUserId(openUserId === user.id ? null : user.id)
                           }
                         >
-                          {user.email} {user.first_name ? `- ${user.first_name} ${user.last_name || ''}` : ''}
+                          {user.email}{' '}
+                          {user.first_name
+                            ? `- ${user.first_name} ${user.last_name || ''}`
+                            : ''}
                         </button>
                         {openUserId === user.id && (
                           <div className="p-2 bg-gray-600">
                             <EditUser
-                              userId={user.id} // <-- correct prop
-                              onSaved={() => {
-                                fetchUsers()
+                              userId={user.id}
+                              onSaved={async () => {
+                                await fetchUsers()
                                 setOpenUserId(null)
                               }}
+                              onClose={() => setOpenUserId(null)}
                             />
                           </div>
                         )}
