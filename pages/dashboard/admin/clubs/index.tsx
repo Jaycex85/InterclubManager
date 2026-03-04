@@ -1,104 +1,66 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { supabase } from '../../../../utils/supabaseClient'
+import { useEffect, useRef, useState } from 'react'
 import EditClub from './EditClub'
+import { supabase } from '../../../../utils/supabaseClient'
 
 type Club = {
   id: string
   name: string
-  city: string | null
 }
 
-export default function AdminClubsPage() {
+export default function ClubsDashboard() {
   const [clubs, setClubs] = useState<Club[]>([])
-  const [loading, setLoading] = useState(false)
-  const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
+  const [openClubId, setOpenClubId] = useState<string | null>(null)
   const containerRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   const fetchClubs = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('clubs').select('*').order('name')
+    const { data } = await supabase.from('clubs').select('id, name')
     if (data) setClubs(data)
-    setLoading(false)
   }
 
   useEffect(() => {
     fetchClubs()
   }, [])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer ce club ?')) return
-    await supabase.from('clubs').delete().eq('id', id)
-    fetchClubs()
-  }
-
-  // 🔥 MODE FORMULAIRE
-  if (selectedClubId) {
-    return (
-      <div className="bg-gray-900 text-gray-100 p-6 rounded">
-        <button
-          onClick={() => setSelectedClubId(null)}
-          className="mb-6 text-yellow-400 hover:underline"
-        >
-          ← Retour à la liste
-        </button>
-
-        <EditClub
-          clubId={selectedClubId}
-          onClose={() => setSelectedClubId(null)}
-          onSaved={fetchClubs}
-        />
-      </div>
-    )
-  }
-
-  // 🔵 MODE LISTE
   return (
-    <div className="bg-gray-900 text-gray-100 p-6 rounded">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-yellow-500">
-          Gestion des Clubs
-        </h1>
+    <div className="p-6 bg-gray-900 min-h-screen">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Clubs</h1>
 
-        <button
-          onClick={() => setSelectedClubId('new')}
-          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
-        >
-          Ajouter un club
-        </button>
+      <div className="space-y-4">
+        {clubs.map(club => (
+          <div key={club.id} className="border border-gray-700 rounded overflow-hidden">
+            <button
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+              onClick={() => setOpenClubId(openClubId === club.id ? null : club.id)}
+            >
+              {club.name}
+            </button>
+
+            <div
+              ref={el => { containerRefs.current[club.id] = el }}
+              style={{
+                overflow: 'hidden',
+                maxHeight: openClubId === club.id ? containerRefs.current[club.id]?.scrollHeight : 0,
+                transition: 'max-height 0.35s ease'
+              }}
+            >
+              {openClubId === club.id && (
+                <div className="p-4 bg-gray-700">
+                  <EditClub
+                    clubId={club.id}
+                    onSaved={() => {
+                      fetchClubs()
+                      setOpenClubId(null)
+                    }}
+                    onClose={() => setOpenClubId(null)}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
-
-      {loading ? (
-        <p>Chargement...</p>
-      ) : (
-        <ul className="space-y-4">
-          {clubs.map(club => (
-            <li key={club.id} className="p-4 bg-gray-800 rounded shadow flex justify-between items-center">
-              <div>
-                <p className="font-bold text-lg">{club.name}</p>
-                <p className="text-gray-400 text-sm">{club.city}</p>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
-                  onClick={() => setSelectedClubId(club.id)}
-                >
-                  Voir / Éditer
-                </button>
-
-                <button
-                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                  onClick={() => handleDelete(club.id)}
-                >
-                  Supprimer
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 }
