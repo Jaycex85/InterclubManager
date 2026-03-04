@@ -6,6 +6,8 @@ import dynamic from "next/dynamic"
 // Chargement dynamique des composants existants
 const ClubsIndex = dynamic(() => import("./clubs/index"), { ssr: false })
 const TeamsIndex = dynamic(() => import("./teams/index"), { ssr: false })
+const UsersIndex = dynamic(() => import("./users/index"), { ssr: false }) // Nouveau panel Users
+
 // Placeholder pour Players (à compléter plus tard)
 const PlayersIndex = () => (
   <div className="p-4 text-gray-300">
@@ -13,7 +15,7 @@ const PlayersIndex = () => (
   </div>
 )
 
-type PanelKey = "clubs" | "teams" | "players"
+type PanelKey = "clubs" | "teams" | "players" | "users"
 
 export default function AdminDashboard() {
   // Panels ouverts (multi)
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
     clubs: useRef<HTMLDivElement>(null),
     teams: useRef<HTMLDivElement>(null),
     players: useRef<HTMLDivElement>(null),
+    users: useRef<HTMLDivElement>(null),
   }
 
   const togglePanel = (panel: PanelKey) => {
@@ -42,6 +45,7 @@ export default function AdminDashboard() {
     })
   }, [openPanels])
 
+  // Hook interne pour animation slide-down
   const useSlideDown = (isOpen: boolean) => {
     const ref = useRef<HTMLDivElement>(null)
     const [height, setHeight] = useState<string>("0px")
@@ -64,6 +68,7 @@ export default function AdminDashboard() {
     { key: "clubs", label: "Clubs", component: <ClubsIndex />, color: "bg-yellow-500 hover:bg-yellow-600" },
     { key: "teams", label: "Teams", component: <TeamsIndex />, color: "bg-green-500 hover:bg-green-600" },
     { key: "players", label: "Players", component: <PlayersIndex />, color: "bg-blue-500 hover:bg-blue-600" },
+    { key: "users", label: "Users", component: <UsersIndex />, color: "bg-purple-500 hover:bg-purple-600" }, // Users ajouté
   ]
 
   return (
