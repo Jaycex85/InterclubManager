@@ -12,11 +12,11 @@ const supabase = createClient(
 
 // Import dynamique du dashboard admin
 const AdminDashboard = dynamic(
-  () => import("./admin/AdminDashboard"), // doit correspondre exactement au fichier
+  () => import("./admin/AdminDashboard"),
   { ssr: false }
 )
 
-// Placeholder pour dashboards à venir
+// Placeholder dashboards
 const PlayerDashboard = () => (
   <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
 )
@@ -38,9 +38,7 @@ export default function DashboardIndex() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
 
       if (!session?.user) {
         router.replace("/auth")
@@ -76,12 +74,11 @@ export default function DashboardIndex() {
     checkUser()
   }, [router])
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-        Vérification de votre session...
-      </div>
-    )
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      Vérification de votre session...
+    </div>
+  )
 
   const panels: { key: keyof Roles; label: string; component: JSX.Element }[] = [
     { key: "admin", label: "Admin", component: <AdminDashboard /> },
@@ -94,25 +91,24 @@ export default function DashboardIndex() {
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
 
       <div className="space-y-4">
-        {panels.map(
-          panel =>
-            roles[panel.key] && (
-              <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
-                <button
-                  className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-                  onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
-                >
-                  {panel.label}
-                </button>
-                <div
-                  className={`transition-max-h duration-500 overflow-hidden ${
-                    openPanel === panel.key ? "max-h-[2000px]" : "max-h-0"
-                  }`}
-                >
-                  {openPanel === panel.key && panel.component}
-                </div>
+        {panels.map(panel =>
+          roles[panel.key] && (
+            <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
+              <button
+                className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+                onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
+              >
+                {panel.label}
+              </button>
+              <div
+                className={`transition-max-h duration-500 overflow-hidden ${
+                  openPanel === panel.key ? "max-h-[2000px]" : "max-h-0"
+                }`}
+              >
+                {openPanel === panel.key && panel.component}
               </div>
-            )
+            </div>
+          )
         )}
       </div>
     </div>
