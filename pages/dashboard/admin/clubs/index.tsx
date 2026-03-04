@@ -23,6 +23,17 @@ export default function ClubsDashboard() {
     fetchClubs()
   }, [])
 
+  // Recalcule la hauteur après chaque ouverture
+  useEffect(() => {
+    if (openClubId && containerRefs.current[openClubId]) {
+      const el = containerRefs.current[openClubId]!
+      // Timeout pour attendre le rendu du contenu enfant
+      setTimeout(() => {
+        el.style.maxHeight = el.scrollHeight + 'px'
+      }, 0)
+    }
+  }, [openClubId])
+
   return (
     <div className="p-6 bg-gray-900 min-h-screen">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Clubs</h1>
@@ -41,7 +52,7 @@ export default function ClubsDashboard() {
               ref={el => { containerRefs.current[club.id] = el }}
               style={{
                 overflow: 'hidden',
-                maxHeight: openClubId === club.id ? containerRefs.current[club.id]?.scrollHeight : 0,
+                maxHeight: openClubId === club.id ? undefined : '0px',
                 transition: 'max-height 0.35s ease'
               }}
             >
