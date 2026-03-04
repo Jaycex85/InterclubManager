@@ -10,30 +10,39 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// Chargement dynamique des dashboards
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
-const PlayerDashboard = () => <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
-const CaptainDashboard = () => <div className="p-4 text-gray-300">Dashboard capitaine à venir...</div>
+const PlayerDashboard = () => (
+  <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
+)
+const CaptainDashboard = () => (
+  <div className="p-4 text-gray-300">Dashboard capitaine à venir...</div>
+)
 
-type Roles = { admin: boolean; player: boolean; captain: boolean }
+type Roles = {
+  admin: boolean
+  player: boolean
+  captain: boolean
+}
 
 export default function DashboardIndex() {
   const router = useRouter()
   const [roles, setRoles] = useState<Roles>({ admin: false, player: false, captain: false })
   const [loading, setLoading] = useState(true)
-  const [openPanels, setOpenPanels] = useState<Record<keyof Roles, boolean>>({
-    admin: false,
-    player: false,
-    captain: false,
-  })
+  const [openPanel, setOpenPanel] = useState<keyof Roles | null>(null)
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
       if (!session?.user) {
         router.replace("/auth")
         return
       }
 
+      // Récupération du rôle depuis Supabase
       const { data: profile, error } = await supabase
         .from("users")
         .select("role")
@@ -45,7 +54,6 @@ export default function DashboardIndex() {
         return
       }
 
-      // Ici on ne redirige plus, on set les rôles pour afficher les panels
       const userRoles: Roles = {
         admin: profile.role === "admin",
         player: profile.role === "player",
@@ -76,10 +84,6 @@ export default function DashboardIndex() {
     { key: "captain", label: "Capitaine", component: <CaptainDashboard /> },
   ]
 
-  const togglePanel = (key: keyof Roles) => {
-    setOpenPanels(prev => ({ ...prev, [key]: !prev[key] }))
-  }
-
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
@@ -89,12 +93,12 @@ export default function DashboardIndex() {
           <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-              onClick={() => togglePanel(panel.key)}
+              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
               {panel.label}
             </button>
-            <div className={`transition-max-h duration-500 overflow-hidden ${openPanels[panel.key] ? 'max-h-[2000px]' : 'max-h-0'}`}>
-              {openPanels[panel.key] && panel.component}
+            <div className={`transition-max-h duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[2000px]' : 'max-h-0'}`}>
+              {openPanel === panel.key && panel.component}
             </div>
           </div>
         ))}
