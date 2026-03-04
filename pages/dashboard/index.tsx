@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/router"
 import dynamic from "next/dynamic"
 import { createClient } from "@supabase/supabase-js"
@@ -10,7 +10,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Panels dynamiques
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
 
 const PlayerDashboardTile = ({ clubName, role }: { clubName: string, role: string }) => (
@@ -47,18 +46,6 @@ export default function DashboardIndex() {
   const [openPanel, setOpenPanel] = useState<keyof Roles | null>(null)
   const [memberships, setMemberships] = useState<Membership[]>([])
 
-  // Hook pour slide down
-  const useSlideDown = (isOpen: boolean) => {
-    const ref = useRef<HTMLDivElement>(null)
-    const [height, setHeight] = useState('0px')
-
-    useEffect(() => {
-      if (ref.current) setHeight(isOpen ? `${ref.current.scrollHeight}px` : '0px')
-    }, [isOpen])
-
-    return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
-  }
-
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -84,7 +71,7 @@ export default function DashboardIndex() {
         admin: globalRole === "admin",
         player: globalRole === "player",
         captain: globalRole === "captain",
-        club_admin: globalRole === "club_admin"
+        club_admin: globalRole === "club_admin",
       })
 
       const { data: membershipsData, error: membershipsError } = await supabase
@@ -93,13 +80,12 @@ export default function DashboardIndex() {
         .eq("user_id", userId)
 
       if (!membershipsError && membershipsData) {
-        setMemberships(
-          membershipsData.map((m: any) => ({
-            club_id: m.club_id,
-            club_name: m.clubs.name,
-            role: m.role
-          }))
-        )
+        const formatted: Membership[] = membershipsData.map((m: any) => ({
+          club_id: m.club_id,
+          club_name: m.clubs.name,
+          role: m.role
+        }))
+        setMemberships(formatted)
       }
 
       setLoading(false)
@@ -133,15 +119,11 @@ export default function DashboardIndex() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6 space-y-4">
+    <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
 
-      {panels.map(panel => {
-        if (!roles[panel.key]) return null
-
-        const { ref, style } = useSlideDown(openPanel === panel.key)
-
-        return (
+      <div className="space-y-4">
+        {panels.map(panel => roles[panel.key] && (
           <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
@@ -149,13 +131,12 @@ export default function DashboardIndex() {
             >
               {panel.label}
             </button>
-
-            <div ref={ref} style={style}>
+            <div className={`transition-all duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[5000px]' : 'max-h-0'}`}>
               {openPanel === panel.key && panel.component}
             </div>
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }
