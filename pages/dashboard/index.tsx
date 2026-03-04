@@ -10,20 +10,11 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// Chargement dynamique des sous-dashboards
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
-const PlayerDashboard = () => (
-  <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
-)
-const CaptainDashboard = () => (
-  <div className="p-4 text-gray-300">Dashboard capitaine à venir...</div>
-)
+const PlayerDashboard = () => <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
+const CaptainDashboard = () => <div className="p-4 text-gray-300">Dashboard capitaine à venir...</div>
 
-type Roles = {
-  admin: boolean
-  player: boolean
-  captain: boolean
-}
+type Roles = { admin: boolean; player: boolean; captain: boolean }
 
 export default function DashboardIndex() {
   const router = useRouter()
@@ -37,10 +28,7 @@ export default function DashboardIndex() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
+      const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) {
         router.replace("/auth")
         return
@@ -57,13 +45,13 @@ export default function DashboardIndex() {
         return
       }
 
+      // Ici on ne redirige plus, on set les rôles pour afficher les panels
       const userRoles: Roles = {
         admin: profile.role === "admin",
         player: profile.role === "player",
-        captain: profile.role === "captain" || false, // si tu as un champ spécifique captain
+        captain: profile.role === "captain" || false,
       }
 
-      // Si aucun rôle valide, renvoie sur auth
       if (!userRoles.admin && !userRoles.player && !userRoles.captain) {
         router.replace("/auth")
         return
@@ -89,10 +77,7 @@ export default function DashboardIndex() {
   ]
 
   const togglePanel = (key: keyof Roles) => {
-    setOpenPanels(prev => ({
-      ...prev,
-      [key]: !prev[key], // inverse l’état du panel cliqué
-    }))
+    setOpenPanels(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
   return (
