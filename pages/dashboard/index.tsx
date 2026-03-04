@@ -29,7 +29,11 @@ export default function DashboardIndex() {
   const router = useRouter()
   const [roles, setRoles] = useState<Roles>({ admin: false, player: false, captain: false })
   const [loading, setLoading] = useState(true)
-  const [openPanel, setOpenPanel] = useState<keyof Roles | null>(null)
+  const [openPanels, setOpenPanels] = useState<Record<keyof Roles, boolean>>({
+    admin: false,
+    player: false,
+    captain: false,
+  })
 
   useEffect(() => {
     const checkUser = async () => {
@@ -84,6 +88,13 @@ export default function DashboardIndex() {
     { key: "captain", label: "Capitaine", component: <CaptainDashboard /> },
   ]
 
+  const togglePanel = (key: keyof Roles) => {
+    setOpenPanels(prev => ({
+      ...prev,
+      [key]: !prev[key], // inverse l’état du panel cliqué
+    }))
+  }
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
@@ -93,12 +104,12 @@ export default function DashboardIndex() {
           <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
+              onClick={() => togglePanel(panel.key)}
             >
               {panel.label}
             </button>
-            <div className={`transition-max-h duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[2000px]' : 'max-h-0'}`}>
-              {openPanel === panel.key && panel.component}
+            <div className={`transition-max-h duration-500 overflow-hidden ${openPanels[panel.key] ? 'max-h-[2000px]' : 'max-h-0'}`}>
+              {openPanels[panel.key] && panel.component}
             </div>
           </div>
         ))}
