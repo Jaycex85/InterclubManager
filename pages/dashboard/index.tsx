@@ -12,11 +12,11 @@ const supabase = createClient(
 
 // Import dynamique du dashboard admin
 const AdminDashboard = dynamic(
-  () => import("./admin/AdminDashboard"),
+  () => import("./admin/AdminDashboard"), // doit correspondre exactement au fichier
   { ssr: false }
 )
 
-// Placeholder pour les dashboards à venir
+// Placeholder pour dashboards à venir
 const PlayerDashboard = () => (
   <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
 )
