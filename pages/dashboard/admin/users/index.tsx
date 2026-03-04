@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 import dynamic from 'next/dynamic'
+import type { EditUserProps } from './EditUser'
 
 type User = {
   id: string
@@ -11,22 +12,18 @@ type User = {
   last_name?: string
 }
 
-// Import dynamique pour le formulaire imbriqué
-const EditUser = dynamic(() => import('./EditUser'), { ssr: false })
+// Import dynamique avec typage
+const EditUser = dynamic<EditUserProps>(() => import('./EditUser'), { ssr: false })
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [openUserId, setOpenUserId] = useState<string | null>(null)
 
-  // Vérifie que l'utilisateur est admin
   useEffect(() => {
     const checkAdmin = async () => {
       const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        window.location.href = '/auth'
-        return
-      }
+      if (!data.user) window.location.href = '/auth'
 
       const { data: profile, error } = await supabase
         .from('users')
@@ -41,14 +38,9 @@ export default function AdminUsersPage() {
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('email')
-
-    if (error) console.error('Erreur récupération users:', error)
+    const { data, error } = await supabase.from('users').select('*').order('email')
+    if (error) console.error(error)
     else setUsers(data || [])
-
     setLoading(false)
   }
 
@@ -57,7 +49,7 @@ export default function AdminUsersPage() {
   }, [])
 
   const toggleUserForm = (userId: string) => {
-    setOpenUserId(prev => (prev === userId ? null : userId))
+    setOpenUserId((prev) => (prev === userId ? null : userId))
   }
 
   return (
@@ -70,20 +62,29 @@ export default function AdminUsersPage() {
         <p>Aucun utilisateur pour le moment.</p>
       ) : (
         <ul className="space-y-4">
-          {users.map(user => (
+          {users.map((user) => (
             <li key={user.id} className="bg-gray-800 rounded shadow overflow-hidden">
               <button
                 className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 font-bold flex justify-between items-center"
                 onClick={() => toggleUserForm(user.id)}
               >
-                <span>{user.email}{user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}</span>
-                <span className={`ml-2 transform transition-transform duration-300 ${openUserId === user.id ? 'rotate-180' : ''}`}>
+                <span>
+                  {user.email}
+                  {user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}
+                </span>
+                <span
+                  className={`ml-2 transform transition-transform duration-300 ${
+                    openUserId === user.id ? 'rotate-180' : ''
+                  }`}
+                >
                   ▼
                 </span>
               </button>
 
               <div
-                className={`transition-all duration-500 overflow-hidden ${openUserId === user.id ? 'max-h-[2000px]' : 'max-h-0'}`}
+                className={`transition-all duration-500 overflow-hidden ${
+                  openUserId === user.id ? 'max-h-[2000px]' : 'max-h-0'
+                }`}
               >
                 {openUserId === user.id && (
                   <div className="p-4 bg-gray-700">
