@@ -6,6 +6,7 @@ import { supabase } from '../../../../utils/supabaseClient'
 export type EditUserProps = {
   userId: string
   onSaved: () => void
+  onClose: () => void  // <-- ajouté pour AdminDashboard
 }
 
 type ClubMembership = {
@@ -22,7 +23,7 @@ type UserData = {
   memberships: ClubMembership[]
 }
 
-export default function EditUser({ userId, onSaved }: EditUserProps) {
+export default function EditUser({ userId, onSaved, onClose }: EditUserProps) {
   const [user, setUser] = useState<UserData>({
     email: '',
     first_name: '',
@@ -32,7 +33,6 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
   const [clubs, setClubs] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Récupère l'utilisateur + ses memberships
   useEffect(() => {
     const fetchUser = async () => {
       setLoading(true)
@@ -50,7 +50,6 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
           last_name: u.last_name || '',
         }))
 
-      // memberships
       const { data: memberships, error: memErr } = await supabase
         .from('club_memberships')
         .select('id, club_id, role, club:name')
@@ -67,7 +66,6 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
         setUser((prev) => ({ ...prev, memberships: mapped }))
       }
 
-      // clubs pour dropdown
       const { data: clubsData } = await supabase.from('clubs').select('id, name').order('name')
       if (clubsData) setClubs(clubsData)
 
@@ -85,7 +83,6 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
     setUser((prev) => {
       const exists = prev.memberships.find((m) => m.club_id === club_id)
       if (!role) {
-        // supprimer membership
         return {
           ...prev,
           memberships: prev.memberships.filter((m) => m.club_id !== club_id),
@@ -111,23 +108,19 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
     e.preventDefault()
     setLoading(true)
 
-    // update user
     const { error: userErr } = await supabase
       .from('users')
       .update({ first_name: user.first_name, last_name: user.last_name })
       .eq('id', userId)
     if (userErr) alert(userErr.message)
 
-    // update memberships
     for (const m of user.memberships) {
       if (!m.id) {
-        // insert
         const { error } = await supabase.from('club_memberships').insert([
           { user_id: userId, club_id: m.club_id, role: m.role },
         ])
         if (error) console.error(error)
       } else {
-        // update
         const { error } = await supabase
           .from('club_memberships')
           .update({ role: m.role })
@@ -197,13 +190,22 @@ export default function EditUser({ userId, onSaved }: EditUserProps) {
         })}
       </div>
 
-      <button
-        type="submit"
-        className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
-        disabled={loading}
-      >
-        Enregistrer
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
+          disabled={loading}
+        >
+          Enregistrer
+        </button>
+        <button
+          type="button"
+          className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded font-bold"
+          onClick={onClose}  // <-- bouton pour fermer le formulaire
+        >
+          Fermer
+        </button>
+      </div>
     </form>
   )
 }
