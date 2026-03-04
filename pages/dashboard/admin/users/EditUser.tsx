@@ -6,7 +6,7 @@ import { supabase } from '../../../../utils/supabaseClient'
 export type EditUserProps = {
   userId: string
   onSaved: () => void
-  onClose: () => void  // <-- ajouté pour AdminDashboard
+  onClose?: () => void // optionnel pour permettre le build partout
 }
 
 type ClubMembership = {
@@ -198,13 +198,16 @@ export default function EditUser({ userId, onSaved, onClose }: EditUserProps) {
         >
           Enregistrer
         </button>
-        <button
-          type="button"
-          className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded font-bold"
-          onClick={onClose}  // <-- bouton pour fermer le formulaire
-        >
-          Fermer
-        </button>
+
+        {onClose && (
+          <button
+            type="button"
+            className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded font-bold"
+            onClick={onClose}
+          >
+            Fermer
+          </button>
+        )}
       </div>
     </form>
   )
