@@ -3,112 +3,131 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 
-export type UserProps = {
+export type EditUserProps = {
   userId: string
   onSaved: () => void
 }
 
-type Club = {
-  id: string
-  name: string
-}
-
-type Membership = {
+type ClubMembership = {
   id: string
   club_id: string
-  role: 'club_admin' | 'member'
   club_name?: string
+  role: 'club_admin' | 'user'
 }
 
-export default function EditUser({ userId, onSaved }: UserProps) {
-  const [email, setEmail] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
-  const [clubs, setClubs] = useState<Club[]>([])
-  const [memberships, setMemberships] = useState<Membership[]>([])
+type UserData = {
+  email: string
+  first_name?: string
+  last_name?: string
+  memberships: ClubMembership[]
+}
+
+export default function EditUser({ userId, onSaved }: EditUserProps) {
+  const [user, setUser] = useState<UserData>({
+    email: '',
+    first_name: '',
+    last_name: '',
+    memberships: [],
+  })
+  const [clubs, setClubs] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Récupère le user et ses memberships
+  // Récupère l'utilisateur + ses memberships
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUser = async () => {
       setLoading(true)
-      // User
-      const { data: userData, error: userError } = await supabase
+      const { data: u, error: userErr } = await supabase
         .from('users')
-        .select('*')
+        .select('email, first_name, last_name')
         .eq('id', userId)
         .single()
+      if (userErr) console.error(userErr)
+      else
+        setUser((prev) => ({
+          ...prev,
+          email: u.email,
+          first_name: u.first_name || '',
+          last_name: u.last_name || '',
+        }))
 
-      if (userError) console.error(userError)
-      else if (userData) {
-        setEmail(userData.email)
-        setFirstName(userData.first_name || '')
-        setLastName(userData.last_name || '')
-      }
-
-      // Clubs pour dropdown
-      const { data: clubData, error: clubError } = await supabase
-        .from('clubs')
-        .select('*')
-        .order('name')
-
-      if (clubError) console.error(clubError)
-      else if (clubData) setClubs(clubData)
-
-      // Memberships
-      const { data: membershipData, error: membershipError } = await supabase
+      // memberships
+      const { data: memberships, error: memErr } = await supabase
         .from('club_memberships')
-        .select(`*, club:club_id(name)`)
+        .select('id, club_id, role, club:name')
         .eq('user_id', userId)
 
-      if (membershipError) console.error(membershipError)
-      else if (membershipData) {
-        setMemberships(
-          membershipData.map((m: any) => ({
-            id: m.id,
-            club_id: m.club_id,
-            role: m.role,
-            club_name: m.club?.name,
-          }))
-        )
+      if (memErr) console.error(memErr)
+      else {
+        const mapped = (memberships || []).map((m: any) => ({
+          id: m.id,
+          club_id: m.club_id,
+          club_name: m.club?.name,
+          role: m.role,
+        }))
+        setUser((prev) => ({ ...prev, memberships: mapped }))
       }
+
+      // clubs pour dropdown
+      const { data: clubsData } = await supabase.from('clubs').select('id, name').order('name')
+      if (clubsData) setClubs(clubsData)
+
       setLoading(false)
     }
 
-    fetchData()
+    fetchUser()
   }, [userId])
 
-  const handleMembershipChange = (clubId: string, role: 'club_admin' | 'member' | '') => {
-    if (role === '') {
-      // Supprime l’adhésion
-      setMemberships(prev => prev.filter(m => m.club_id !== clubId))
-    } else {
-      setMemberships(prev => {
-        const existing = prev.find(m => m.club_id === clubId)
-        if (existing) return prev.map(m => (m.club_id === clubId ? { ...m, role } : m))
-        return [...prev, { id: '', club_id: clubId, role }]
-      })
-    }
+  const handleChange = (field: keyof UserData, value: string) => {
+    setUser({ ...user, [field]: value })
   }
 
-  const handleSave = async () => {
+  const handleMembershipChange = (club_id: string, role: 'club_admin' | 'user' | '') => {
+    setUser((prev) => {
+      const exists = prev.memberships.find((m) => m.club_id === club_id)
+      if (!role) {
+        // supprimer membership
+        return {
+          ...prev,
+          memberships: prev.memberships.filter((m) => m.club_id !== club_id),
+        }
+      }
+      if (exists) {
+        return {
+          ...prev,
+          memberships: prev.memberships.map((m) =>
+            m.club_id === club_id ? { ...m, role } : m
+          ),
+        }
+      } else {
+        return {
+          ...prev,
+          memberships: [...prev.memberships, { id: '', club_id, role }],
+        }
+      }
+    })
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
     setLoading(true)
 
-    // Update user info
-    const { error: userError } = await supabase
+    // update user
+    const { error: userErr } = await supabase
       .from('users')
-      .update({ email, first_name: firstName, last_name: lastName })
+      .update({ first_name: user.first_name, last_name: user.last_name })
       .eq('id', userId)
-    if (userError) alert(userError.message)
+    if (userErr) alert(userErr.message)
 
-    // Update memberships
-    for (const m of memberships) {
+    // update memberships
+    for (const m of user.memberships) {
       if (!m.id) {
+        // insert
         const { error } = await supabase.from('club_memberships').insert([
-          { user_id: userId, club_id: m.club_id, role: m.role }
+          { user_id: userId, club_id: m.club_id, role: m.role },
         ])
         if (error) console.error(error)
       } else {
+        // update
         const { error } = await supabase
           .from('club_memberships')
           .update({ role: m.role })
@@ -117,85 +136,74 @@ export default function EditUser({ userId, onSaved }: UserProps) {
       }
     }
 
-    // Supprime les memberships non sélectionnés
-    const removed = memberships.map(m => m.club_id)
-    const { error: delError } = await supabase
-      .from('club_memberships')
-      .delete()
-      .eq('user_id', userId)
-      .not('club_id', 'in', `(${removed.join(',')})`)
-
-    if (delError) console.error(delError)
-
     setLoading(false)
     onSaved()
   }
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={handleSave} className="space-y-4 max-w-lg">
       {loading && <p>Chargement...</p>}
 
       <div>
         <label className="block mb-1">Email</label>
         <input
           type="email"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
+          value={user.email}
+          disabled
+          className="w-full p-2 rounded bg-gray-800 text-white cursor-not-allowed"
+        />
+      </div>
+
+      <div>
+        <label className="block mb-1">Prénom</label>
+        <input
+          type="text"
+          value={user.first_name}
+          onChange={(e) => handleChange('first_name', e.target.value)}
           className="w-full p-2 rounded bg-gray-800 text-white"
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block mb-1">Prénom</label>
-          <input
-            type="text"
-            value={firstName}
-            onChange={e => setFirstName(e.target.value)}
-            className="w-full p-2 rounded bg-gray-800 text-white"
-          />
-        </div>
-        <div>
-          <label className="block mb-1">Nom</label>
-          <input
-            type="text"
-            value={lastName}
-            onChange={e => setLastName(e.target.value)}
-            className="w-full p-2 rounded bg-gray-800 text-white"
-          />
-        </div>
+      <div>
+        <label className="block mb-1">Nom</label>
+        <input
+          type="text"
+          value={user.last_name}
+          onChange={(e) => handleChange('last_name', e.target.value)}
+          className="w-full p-2 rounded bg-gray-800 text-white"
+        />
       </div>
 
-      <div>
+      <div className="space-y-2">
         <label className="block mb-1 font-bold">Clubs</label>
-        <div className="space-y-2">
-          {clubs.map(club => {
-            const membership = memberships.find(m => m.club_id === club.id)
-            return (
-              <div key={club.id} className="flex items-center gap-2">
-                <span className="flex-1">{club.name}</span>
-                <select
-                  value={membership?.role || ''}
-                  onChange={e => handleMembershipChange(club.id, e.target.value as any)}
-                  className="p-1 rounded bg-gray-700 text-white"
-                >
-                  <option value="">Aucun</option>
-                  <option value="member">Membre</option>
-                  <option value="club_admin">Admin club</option>
-                </select>
-              </div>
-            )
-          })}
-        </div>
+        {clubs.map((c) => {
+          const membership = user.memberships.find((m) => m.club_id === c.id)
+          return (
+            <div key={c.id} className="flex items-center gap-2">
+              <span className="w-32">{c.name}</span>
+              <select
+                value={membership?.role || ''}
+                onChange={(e) =>
+                  handleMembershipChange(c.id, e.target.value as 'club_admin' | 'user' | '')
+                }
+                className="p-1 rounded bg-gray-800 text-white"
+              >
+                <option value="">Non lié</option>
+                <option value="user">Utilisateur</option>
+                <option value="club_admin">Admin Club</option>
+              </select>
+            </div>
+          )
+        })}
       </div>
 
       <button
-        onClick={handleSave}
+        type="submit"
         className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
         disabled={loading}
       >
         Enregistrer
       </button>
-    </div>
+    </form>
   )
 }
