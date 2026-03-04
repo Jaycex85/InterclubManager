@@ -4,13 +4,17 @@ import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 import EditClub from './EditClub'
 
-type Club = { id: string; name: string; city: string | null }
+type Club = {
+  id: string
+  name: string
+  city: string | null
+}
 
 export default function AdminClubsPage() {
   const [clubs, setClubs] = useState<Club[]>([])
   const [loading, setLoading] = useState(false)
-  const [openClubId, setOpenClubId] = useState<string | null>(null)
-  const containerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
+  const containerRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   const fetchClubs = async () => {
     setLoading(true)
@@ -19,50 +23,77 @@ export default function AdminClubsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchClubs() }, [])
+  useEffect(() => {
+    fetchClubs()
+  }, [])
 
-  const toggleClubForm = (clubId: string) => {
-    setOpenClubId(prev => (prev === clubId ? null : clubId))
+  const handleDelete = async (id: string) => {
+    if (!confirm('Supprimer ce club ?')) return
+    await supabase.from('clubs').delete().eq('id', id)
+    fetchClubs()
   }
 
-  useEffect(() => {
-    if (openClubId && containerRefs.current[openClubId]) {
-      const el = containerRefs.current[openClubId]
-      el!.style.maxHeight = el!.scrollHeight + 'px'
-    }
-  }, [openClubId])
+  // 🔥 MODE FORMULAIRE
+  if (selectedClubId) {
+    return (
+      <div className="bg-gray-900 text-gray-100 p-6 rounded">
+        <button
+          onClick={() => setSelectedClubId(null)}
+          className="mb-6 text-yellow-400 hover:underline"
+        >
+          ← Retour à la liste
+        </button>
 
+        <EditClub
+          clubId={selectedClubId}
+          onClose={() => setSelectedClubId(null)}
+          onSaved={fetchClubs}
+        />
+      </div>
+    )
+  }
+
+  // 🔵 MODE LISTE
   return (
     <div className="bg-gray-900 text-gray-100 p-6 rounded">
-      <h1 className="text-3xl font-bold text-yellow-500 mb-6">Gestion des Clubs</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-yellow-500">
+          Gestion des Clubs
+        </h1>
 
-      {loading ? <p>Chargement...</p> : (
+        <button
+          onClick={() => setSelectedClubId('new')}
+          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
+        >
+          Ajouter un club
+        </button>
+      </div>
+
+      {loading ? (
+        <p>Chargement...</p>
+      ) : (
         <ul className="space-y-4">
           {clubs.map(club => (
-            <li key={club.id} className="bg-gray-800 rounded shadow overflow-hidden">
-              <button
-                className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 font-bold flex justify-between items-center"
-                onClick={() => toggleClubForm(club.id)}
-              >
-                <span>{club.name} {club.city ? `- ${club.city}` : ''}</span>
-                <span className={`ml-2 transform transition-transform duration-300 ${openClubId === club.id ? 'rotate-180' : ''}`}>
-                  ▼
-                </span>
-              </button>
+            <li key={club.id} className="p-4 bg-gray-800 rounded shadow flex justify-between items-center">
+              <div>
+                <p className="font-bold text-lg">{club.name}</p>
+                <p className="text-gray-400 text-sm">{club.city}</p>
+              </div>
 
-              <div
-                ref={el => (containerRefs.current[club.id] = el)}
-                style={{ overflow: 'hidden', maxHeight: openClubId === club.id ? undefined : 0, transition: 'max-height 0.35s ease' }}
-              >
-                {openClubId === club.id && (
-                  <div className="p-4 bg-gray-700">
-                    <EditClub
-                      clubId={club.id}
-                      onSaved={() => { fetchClubs(); setOpenClubId(null) }}
-                      onClose={() => setOpenClubId(null)}
-                    />
-                  </div>
-                )}
+              <div className="flex gap-2">
+                <button
+                  className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
+                  onClick={() => setSelectedClubId(club.id)}
+                >
+                  Voir / Éditer
+                </button>
+
+                <button
+                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                  onClick={() => handleDelete(club.id)}
+                >
+                  Supprimer
+                </button>
               </div>
             </li>
           ))}
