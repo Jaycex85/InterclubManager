@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import dynamic from "next/dynamic"
-import { supabase } from "../../utils/supabaseClient"
+import { supabase } from "../../../utils/supabaseClient"
 
 // Panels dynamiques existants
 const ClubsIndex = dynamic(() => import("./clubs/index"), { ssr: false })
