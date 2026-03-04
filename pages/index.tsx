@@ -50,7 +50,7 @@ export default function DashboardRedirect() {
 
       // Redirection selon rôle
       if (userProfile.role === "admin") {
-        router.push("/dashboard/admin/clubs");
+        router.push("/dashboard/admin");
       } else if (userProfile.role === "club_admin") {
         router.push("/dashboard/responsable/equipes");
       } else if (userProfile.role === "player") {
