@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 import dynamic from 'next/dynamic'
 import type { EditUserProps } from './EditUser'
 
 type User = { id: string; email: string; first_name?: string; last_name?: string }
 
+// Import dynamique
 const EditUser = dynamic<EditUserProps>(() => import('./EditUser'), { ssr: false })
 
 export default function AdminUsersPage() {
@@ -14,6 +15,23 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(false)
   const [openUserId, setOpenUserId] = useState<string | null>(null)
 
+  // slide-down hook
+  const useSlideDown = (isOpen: boolean) => {
+    const ref = useRef<HTMLDivElement>(null)
+    const [height, setHeight] = useState('0px')
+
+    useEffect(() => {
+      if (ref.current) {
+        setTimeout(() => {
+          setHeight(isOpen ? `${ref.current!.scrollHeight}px` : '0px')
+        }, 0)
+      }
+    }, [isOpen, ref.current?.scrollHeight])
+
+    return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
+  }
+
+  // Vérifier admin
   useEffect(() => {
     const checkAdmin = async () => {
       const { data } = await supabase.auth.getUser()
@@ -56,29 +74,25 @@ export default function AdminUsersPage() {
         <p>Aucun utilisateur pour le moment.</p>
       ) : (
         <ul className="space-y-4">
-          {users.map(user => (
-            <li key={user.id} className="bg-gray-800 rounded shadow overflow-hidden">
-              <button
-                className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 font-bold flex justify-between items-center"
-                onClick={() => toggleUserForm(user.id)}
-              >
-                <span>
-                  {user.email}
-                  {user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}
-                </span>
-                <span className={`ml-2 transform transition-transform duration-300 ${openUserId === user.id ? 'rotate-180' : ''}`}>
-                  ▼
-                </span>
-              </button>
+          {users.map(user => {
+            const { ref, style } = useSlideDown(openUserId === user.id)
+            return (
+              <li key={user.id} className="bg-gray-800 rounded shadow overflow-hidden">
+                <button
+                  className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 font-bold flex justify-between items-center"
+                  onClick={() => toggleUserForm(user.id)}
+                >
+                  <span>
+                    {user.email}
+                    {user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}
+                  </span>
+                  <span className={`ml-2 transform transition-transform duration-300 ${openUserId === user.id ? 'rotate-180' : ''}`}>
+                    ▼
+                  </span>
+                </button>
 
-              <div style={{ overflow: 'hidden', transition: 'max-height 0.35s ease' }}>
-                {openUserId === user.id && (
-                  <div
-                    ref={el => {
-                      if (el) el.style.maxHeight = el.scrollHeight + 'px'
-                    }}
-                    className="p-4 bg-gray-700"
-                  >
+                <div ref={ref} style={style} className="p-4 bg-gray-700">
+                  {openUserId === user.id && (
                     <EditUser
                       userId={user.id}
                       onSaved={() => {
@@ -87,11 +101,11 @@ export default function AdminUsersPage() {
                       }}
                       onClose={() => setOpenUserId(null)}
                     />
-                  </div>
-                )}
-              </div>
-            </li>
-          ))}
+                  )}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
