@@ -5,12 +5,7 @@ import { supabase } from '../../../../utils/supabaseClient'
 import dynamic from 'next/dynamic'
 import type { EditUserProps } from './EditUser'
 
-type User = {
-  id: string
-  email: string
-  first_name?: string
-  last_name?: string
-}
+type User = { id: string; email: string; first_name?: string; last_name?: string }
 
 const EditUser = dynamic<EditUserProps>(() => import('./EditUser'), { ssr: false })
 
@@ -48,7 +43,7 @@ export default function AdminUsersPage() {
   }, [])
 
   const toggleUserForm = (userId: string) => {
-    setOpenUserId((prev) => (prev === userId ? null : userId))
+    setOpenUserId(prev => (prev === userId ? null : userId))
   }
 
   return (
@@ -61,7 +56,7 @@ export default function AdminUsersPage() {
         <p>Aucun utilisateur pour le moment.</p>
       ) : (
         <ul className="space-y-4">
-          {users.map((user) => (
+          {users.map(user => (
             <li key={user.id} className="bg-gray-800 rounded shadow overflow-hidden">
               <button
                 className="w-full text-left p-4 bg-gray-700 hover:bg-gray-600 font-bold flex justify-between items-center"
@@ -71,29 +66,26 @@ export default function AdminUsersPage() {
                   {user.email}
                   {user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}
                 </span>
-                <span
-                  className={`ml-2 transform transition-transform duration-300 ${
-                    openUserId === user.id ? 'rotate-180' : ''
-                  }`}
-                >
+                <span className={`ml-2 transform transition-transform duration-300 ${openUserId === user.id ? 'rotate-180' : ''}`}>
                   ▼
                 </span>
               </button>
 
-              <div
-                className={`transition-all duration-500 overflow-hidden ${
-                  openUserId === user.id ? 'max-h-[2000px]' : 'max-h-0'
-                }`}
-              >
+              <div style={{ overflow: 'hidden', transition: 'max-height 0.35s ease' }}>
                 {openUserId === user.id && (
-                  <div className="p-4 bg-gray-700">
+                  <div
+                    ref={el => {
+                      if (el) el.style.maxHeight = el.scrollHeight + 'px'
+                    }}
+                    className="p-4 bg-gray-700"
+                  >
                     <EditUser
                       userId={user.id}
                       onSaved={() => {
                         fetchUsers()
                         setOpenUserId(null)
                       }}
-                      onClose={() => setOpenUserId(null)} // <-- fix build
+                      onClose={() => setOpenUserId(null)}
                     />
                   </div>
                 )}
