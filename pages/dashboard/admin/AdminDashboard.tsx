@@ -106,14 +106,17 @@ export default function AdminDashboard() {
     { key: 'users', label: 'Users', color: 'bg-blue-500 hover:bg-blue-600' },
   ]
 
-  /** DYNAMIC SLIDE-DOWN HOOK */
+  /** DYNAMIC SLIDE-DOWN HOOK AVEC FIX */
   const useSlideDown = (isOpen: boolean) => {
     const ref = useRef<HTMLDivElement>(null)
     const [height, setHeight] = useState('0px')
 
     useEffect(() => {
       if (ref.current) {
-        setHeight(isOpen ? `${ref.current.scrollHeight}px` : '0px')
+        // Timeout pour attendre le rendu des enfants dynamiques
+        setTimeout(() => {
+          setHeight(isOpen ? `${ref.current!.scrollHeight}px` : '0px')
+        }, 0)
       }
     }, [isOpen, ref.current?.scrollHeight])
 
@@ -145,6 +148,7 @@ export default function AdminDashboard() {
 
               <div ref={ref} style={style} className="mt-2 bg-gray-800 rounded shadow">
                 <div className="p-4 md:p-6">
+                  {/* ---------- CLUBS ---------- */}
                   {key === 'clubs' &&
                     clubs.map(club => (
                       <div key={club.id} className="mb-4 border-b border-gray-600">
@@ -169,6 +173,7 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
+                  {/* ---------- TEAMS ---------- */}
                   {key === 'teams' &&
                     teams.map(team => (
                       <div key={team.id} className="mb-4 border-b border-gray-600">
@@ -194,6 +199,7 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
+                  {/* ---------- USERS ---------- */}
                   {key === 'users' &&
                     users.map(user => (
                       <div key={user.id} className="mb-4 border-b border-gray-600">
