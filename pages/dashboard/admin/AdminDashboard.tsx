@@ -4,19 +4,14 @@ import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 
-// Imports dynamiques des formulaires imbriqués
+// Formulaires dynamiques
 const ClubForm = dynamic(() => import('./clubs/EditClub'), { ssr: false })
 const TeamForm = dynamic(() => import('./teams/EditTeam'), { ssr: false })
 const EditUser = dynamic(() => import('./users/EditUser'), { ssr: false })
 
 type PanelKey = 'clubs' | 'teams' | 'users'
 
-type Club = {
-  id: string
-  name: string
-  city?: string
-}
-
+type Club = { id: string; name: string; city?: string }
 type Team = {
   id: string
   name: string
@@ -26,20 +21,17 @@ type Team = {
   captain_id?: string
   captain_email?: string
 }
-
-type User = {
-  id: string
-  email: string
-  first_name?: string
-  last_name?: string
-}
+type User = { id: string; email: string; first_name?: string; last_name?: string }
 
 export default function AdminDashboard() {
-  /** ---------- PANEL STATES ---------- */
   const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
   const [openClubId, setOpenClubId] = useState<string | null>(null)
   const [openTeamId, setOpenTeamId] = useState<string | null>(null)
   const [openUserId, setOpenUserId] = useState<string | null>(null)
+
+  const [clubs, setClubs] = useState<Club[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [users, setUsers] = useState<User[]>([])
 
   const panelRefs = {
     clubs: useRef<HTMLDivElement>(null),
@@ -60,21 +52,7 @@ export default function AdminDashboard() {
     })
   }, [openPanels])
 
-  const useSlideDown = (isOpen: boolean) => {
-    const ref = useRef<HTMLDivElement>(null)
-    const [height, setHeight] = useState('0px')
-    useEffect(() => {
-      if (ref.current) setHeight(isOpen ? `${ref.current.scrollHeight}px` : '0px')
-    }, [isOpen])
-    return { ref, style: { maxHeight: height, transition: 'max-height 0.35s ease' } }
-  }
-
-  /** ---------- DATA STATES ---------- */
-  const [clubs, setClubs] = useState<Club[]>([])
-  const [teams, setTeams] = useState<Team[]>([])
-  const [users, setUsers] = useState<User[]>([])
-
-  /** ---------- FETCH FUNCTIONS ---------- */
+  /** FETCH FUNCTIONS */
   const fetchClubs = async () => {
     const { data, error } = await supabase.from('clubs').select('*').order('name')
     if (error) console.error(error)
@@ -121,12 +99,26 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
-  /** ---------- PANELS CONFIG ---------- */
+  /** PANEL CONFIG */
   const panels: { key: PanelKey; label: string; color: string }[] = [
     { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
     { key: 'teams', label: 'Teams', color: 'bg-green-500 hover:bg-green-600' },
     { key: 'users', label: 'Users', color: 'bg-blue-500 hover:bg-blue-600' },
   ]
+
+  /** DYNAMIC SLIDE-DOWN HOOK */
+  const useSlideDown = (isOpen: boolean) => {
+    const ref = useRef<HTMLDivElement>(null)
+    const [height, setHeight] = useState('0px')
+
+    useEffect(() => {
+      if (ref.current) {
+        setHeight(isOpen ? `${ref.current.scrollHeight}px` : '0px')
+      }
+    }, [isOpen, ref.current?.scrollHeight])
+
+    return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
@@ -146,30 +138,19 @@ export default function AdminDashboard() {
                 className={`w-full ${color} p-4 md:p-6 rounded shadow text-black font-bold text-xl flex justify-between items-center`}
               >
                 <span>{label}</span>
-                <span
-                  className={`ml-2 transform transition-transform duration-300 ${
-                    isOpen ? 'rotate-180' : ''
-                  }`}
-                >
+                <span className={`ml-2 transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>
                   ▼
                 </span>
               </button>
 
-              <div
-                ref={ref}
-                style={style}
-                className="overflow-hidden mt-2 bg-gray-800 rounded shadow"
-              >
+              <div ref={ref} style={style} className="mt-2 bg-gray-800 rounded shadow">
                 <div className="p-4 md:p-6">
-                  {/* ---------- CLUBS ---------- */}
                   {key === 'clubs' &&
                     clubs.map(club => (
                       <div key={club.id} className="mb-4 border-b border-gray-600">
                         <button
                           className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() =>
-                            setOpenClubId(openClubId === club.id ? null : club.id)
-                          }
+                          onClick={() => setOpenClubId(openClubId === club.id ? null : club.id)}
                         >
                           {club.name} {club.city ? `- ${club.city}` : ''}
                         </button>
@@ -188,15 +169,12 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
-                  {/* ---------- TEAMS ---------- */}
                   {key === 'teams' &&
                     teams.map(team => (
                       <div key={team.id} className="mb-4 border-b border-gray-600">
                         <button
                           className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() =>
-                            setOpenTeamId(openTeamId === team.id ? null : team.id)
-                          }
+                          onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
                         >
                           {team.name} - {team.club_name}
                           {team.category ? ` - ${team.category}` : ''}
@@ -216,20 +194,15 @@ export default function AdminDashboard() {
                       </div>
                     ))}
 
-                  {/* ---------- USERS ---------- */}
                   {key === 'users' &&
                     users.map(user => (
                       <div key={user.id} className="mb-4 border-b border-gray-600">
                         <button
                           className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() =>
-                            setOpenUserId(openUserId === user.id ? null : user.id)
-                          }
+                          onClick={() => setOpenUserId(openUserId === user.id ? null : user.id)}
                         >
                           {user.email}{' '}
-                          {user.first_name
-                            ? `- ${user.first_name} ${user.last_name || ''}`
-                            : ''}
+                          {user.first_name ? `- ${user.first_name} ${user.last_name || ''}` : ''}
                         </button>
                         {openUserId === user.id && (
                           <div className="p-2 bg-gray-600">
@@ -239,7 +212,7 @@ export default function AdminDashboard() {
                                 await fetchUsers()
                                 setOpenUserId(null)
                               }}
-                              onClose={() => setOpenUserId(null)} // <-- fix build
+                              onClose={() => setOpenUserId(null)}
                             />
                           </div>
                         )}
