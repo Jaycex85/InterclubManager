@@ -239,7 +239,7 @@ export default function AdminDashboard() {
                                 await fetchUsers()
                                 setOpenUserId(null)
                               }}
-                              onClose={() => setOpenUserId(null)}
+                              onClose={() => setOpenUserId(null)} // <-- fix build
                             />
                           </div>
                         )}
