@@ -45,18 +45,10 @@ export default function AdminDashboard() {
     )
   }
 
-  useEffect(() => {
-    openPanels.forEach(panel => {
-      const ref = panelRefs[panel].current
-      if (ref) ref.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }, [openPanels])
-
   /** FETCH FUNCTIONS */
   const fetchClubs = async () => {
     const { data, error } = await supabase.from('clubs').select('*').order('name')
-    if (error) console.error(error)
-    else setClubs(data || [])
+    if (!error) setClubs(data || [])
   }
 
   const fetchTeams = async () => {
@@ -72,8 +64,7 @@ export default function AdminDashboard() {
         captain:captain_id(email)
       `)
       .order('name')
-    if (error) console.error(error)
-    else
+    if (!error)
       setTeams(
         (data || []).map((t: any) => ({
           id: t.id,
@@ -89,8 +80,7 @@ export default function AdminDashboard() {
 
   const fetchUsers = async () => {
     const { data, error } = await supabase.from('users').select('*').order('email')
-    if (error) console.error(error)
-    else setUsers(data || [])
+    if (!error) setUsers(data || [])
   }
 
   useEffect(() => {
@@ -99,29 +89,29 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
-  /** PANEL CONFIG */
-  const panels: { key: PanelKey; label: string; color: string }[] = [
-    { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
-    { key: 'teams', label: 'Teams', color: 'bg-green-500 hover:bg-green-600' },
-    { key: 'users', label: 'Users', color: 'bg-blue-500 hover:bg-blue-600' },
-  ]
-
-  /** DYNAMIC SLIDE-DOWN HOOK AVEC FIX */
+  /** HOOK DE SLIDE-DOWN */
   const useSlideDown = (isOpen: boolean) => {
     const ref = useRef<HTMLDivElement>(null)
     const [height, setHeight] = useState('0px')
 
     useEffect(() => {
-      if (ref.current) {
-        // Timeout pour attendre le rendu des enfants dynamiques
-        setTimeout(() => {
-          setHeight(isOpen ? `${ref.current!.scrollHeight}px` : '0px')
-        }, 0)
-      }
+      if (!ref.current) return
+      const el = ref.current
+      // Timeout pour attendre le rendu des enfants dynamiques
+      const timeout = setTimeout(() => {
+        setHeight(isOpen ? `${el.scrollHeight}px` : '0px')
+      }, 0)
+      return () => clearTimeout(timeout)
     }, [isOpen, ref.current?.scrollHeight])
 
     return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
   }
+
+  const panels: { key: PanelKey; label: string; color: string }[] = [
+    { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
+    { key: 'teams', label: 'Teams', color: 'bg-green-500 hover:bg-green-600' },
+    { key: 'users', label: 'Users', color: 'bg-blue-500 hover:bg-blue-600' },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
@@ -150,80 +140,88 @@ export default function AdminDashboard() {
                 <div className="p-4 md:p-6">
                   {/* ---------- CLUBS ---------- */}
                   {key === 'clubs' &&
-                    clubs.map(club => (
-                      <div key={club.id} className="mb-4 border-b border-gray-600">
-                        <button
-                          className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() => setOpenClubId(openClubId === club.id ? null : club.id)}
-                        >
-                          {club.name} {club.city ? `- ${club.city}` : ''}
-                        </button>
-                        {openClubId === club.id && (
-                          <div className="p-2 bg-gray-600">
-                            <ClubForm
-                              clubId={club.id}
-                              onSaved={async () => {
-                                await fetchClubs()
-                                setOpenClubId(null)
-                              }}
-                              onClose={() => setOpenClubId(null)}
-                            />
+                    clubs.map(club => {
+                      const { ref: clubRef, style: clubStyle } = useSlideDown(openClubId === club.id)
+                      return (
+                        <div key={club.id} className="mb-4 border-b border-gray-600">
+                          <button
+                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
+                            onClick={() => setOpenClubId(openClubId === club.id ? null : club.id)}
+                          >
+                            {club.name} {club.city ? `- ${club.city}` : ''}
+                          </button>
+                          <div ref={clubRef} style={clubStyle} className="p-2 bg-gray-600 rounded mt-2">
+                            {openClubId === club.id && (
+                              <ClubForm
+                                clubId={club.id}
+                                onSaved={async () => {
+                                  await fetchClubs()
+                                  setOpenClubId(null)
+                                }}
+                                onClose={() => setOpenClubId(null)}
+                              />
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      )
+                    })}
 
                   {/* ---------- TEAMS ---------- */}
                   {key === 'teams' &&
-                    teams.map(team => (
-                      <div key={team.id} className="mb-4 border-b border-gray-600">
-                        <button
-                          className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
-                        >
-                          {team.name} - {team.club_name}
-                          {team.category ? ` - ${team.category}` : ''}
-                        </button>
-                        {openTeamId === team.id && (
-                          <div className="p-2 bg-gray-600">
-                            <TeamForm
-                              teamId={team.id}
-                              onSaved={async () => {
-                                await fetchTeams()
-                                setOpenTeamId(null)
-                              }}
-                              onClose={() => setOpenTeamId(null)}
-                            />
+                    teams.map(team => {
+                      const { ref: teamRef, style: teamStyle } = useSlideDown(openTeamId === team.id)
+                      return (
+                        <div key={team.id} className="mb-4 border-b border-gray-600">
+                          <button
+                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
+                            onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
+                          >
+                            {team.name} - {team.club_name}
+                            {team.category ? ` - ${team.category}` : ''}
+                          </button>
+                          <div ref={teamRef} style={teamStyle} className="p-2 bg-gray-600 rounded mt-2">
+                            {openTeamId === team.id && (
+                              <TeamForm
+                                teamId={team.id}
+                                onSaved={async () => {
+                                  await fetchTeams()
+                                  setOpenTeamId(null)
+                                }}
+                                onClose={() => setOpenTeamId(null)}
+                              />
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      )
+                    })}
 
                   {/* ---------- USERS ---------- */}
                   {key === 'users' &&
-                    users.map(user => (
-                      <div key={user.id} className="mb-4 border-b border-gray-600">
-                        <button
-                          className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                          onClick={() => setOpenUserId(openUserId === user.id ? null : user.id)}
-                        >
-                          {user.email}{' '}
-                          {user.first_name ? `- ${user.first_name} ${user.last_name || ''}` : ''}
-                        </button>
-                        {openUserId === user.id && (
-                          <div className="p-2 bg-gray-600">
-                            <EditUser
-                              userId={user.id}
-                              onSaved={async () => {
-                                await fetchUsers()
-                                setOpenUserId(null)
-                              }}
-                              onClose={() => setOpenUserId(null)}
-                            />
+                    users.map(user => {
+                      const { ref: userRef, style: userStyle } = useSlideDown(openUserId === user.id)
+                      return (
+                        <div key={user.id} className="mb-4 border-b border-gray-600">
+                          <button
+                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
+                            onClick={() => setOpenUserId(openUserId === user.id ? null : user.id)}
+                          >
+                            {user.email} {user.first_name ? `- ${user.first_name} ${user.last_name || ''}` : ''}
+                          </button>
+                          <div ref={userRef} style={userStyle} className="p-2 bg-gray-600 rounded mt-2">
+                            {openUserId === user.id && (
+                              <EditUser
+                                userId={user.id}
+                                onSaved={async () => {
+                                  await fetchUsers()
+                                  setOpenUserId(null)
+                                }}
+                                onClose={() => setOpenUserId(null)}
+                              />
+                            )}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                        </div>
+                      )
+                    })}
                 </div>
               </div>
             </div>
