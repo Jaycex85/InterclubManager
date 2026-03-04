@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '../../../../../utils/supabaseClient' // chemin ajusté depuis /pages/dashboard/admin/teams/index.tsx
+import { supabase } from '@/utils/supabaseClient'
 
 type Team = {
   id: string
@@ -15,12 +15,11 @@ type Team = {
 }
 
 export default function AdminTeamsPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<any>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
-  // Vérifie que l'utilisateur est admin
+  // Vérification rôle admin
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -28,69 +27,59 @@ export default function AdminTeamsPage() {
         router.push('/auth')
         return
       }
-      setUser(data.user)
-
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('users')
         .select('role')
         .eq('auth_id', data.user.id)
         .single()
-
-      if (profile?.role !== 'admin') router.push('/auth')
+      if (error || profile?.role !== 'admin') router.push('/auth')
     }
     checkUser()
   }, [router])
 
-  // Récupère les équipes uniquement si user est défini
+  // Récupération des équipes
+  const fetchTeams = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('teams')
+      .select(`
+        id,
+        name,
+        club_id,
+        category,
+        captain_id,
+        club:club_id(name),
+        captain:captain_id(email)
+      `)
+      .order('name')
+
+    if (error) console.error('Error fetching teams:', error)
+    else
+      setTeams(
+        (data || []).map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          club_id: t.club_id,
+          club_name: t.club?.name || '',
+          category: t.category,
+          captain_id: t.captain_id,
+          captain_email: t.captain?.email || '',
+        }))
+      )
+    setLoading(false)
+  }
+
   useEffect(() => {
-    if (!user) return
-
-    const fetchTeams = async () => {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('teams')
-        .select(`
-          id,
-          name,
-          club_id,
-          category,
-          captain_id,
-          club:club_id(name),
-          captain:captain_id(email)
-        `)
-        .order('name')
-
-      if (error) console.error('Error fetching teams:', error)
-      else
-        setTeams(
-          data.map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            club_id: t.club_id,
-            club_name: t.club?.name || '',
-            category: t.category,
-            captain_id: t.captain_id,
-            captain_email: t.captain?.email || '',
-          }))
-        )
-      setLoading(false)
-    }
-
     fetchTeams()
-  }, [user])
+  }, [])
 
   // Supprimer une équipe
   const handleDelete = async (id: string) => {
     if (!confirm('Voulez-vous vraiment supprimer cette équipe ?')) return
     const { error } = await supabase.from('teams').delete().eq('id', id)
     if (error) alert(error.message)
-    else {
-      // Re-fetch après suppression
-      setTeams((prev) => prev.filter((t) => t.id !== id))
-    }
+    else fetchTeams()
   }
-
-  if (!user) return <p className="p-6 text-gray-100">Chargement...</p>
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
