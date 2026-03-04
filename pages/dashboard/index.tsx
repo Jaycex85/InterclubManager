@@ -1,8 +1,8 @@
-// pages/dashboard/index.tsx
 'use client'
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/router"
+import dynamic from "next/dynamic"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
@@ -10,61 +10,62 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// Chargement dynamique des sous-dashboards
+const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
+const PlayerDashboard = () => (
+  <div className="p-4 text-gray-300">Dashboard joueur à venir...</div>
+)
+const CaptainDashboard = () => (
+  <div className="p-4 text-gray-300">Dashboard capitaine à venir...</div>
+)
+
 type Roles = {
   admin: boolean
-  club_admin: boolean
   player: boolean
   captain: boolean
 }
 
-export default function DashboardPage() {
+export default function DashboardIndex() {
   const router = useRouter()
+  const [roles, setRoles] = useState<Roles>({ admin: false, player: false, captain: false })
   const [loading, setLoading] = useState(true)
-  const [roles, setRoles] = useState<Roles>({
-    admin: false,
-    club_admin: false,
-    player: false,
-    captain: false,
-  })
+  const [openPanel, setOpenPanel] = useState<keyof Roles | null>(null)
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-
-      if (sessionError) {
-        console.log("Erreur récupération session :", sessionError)
-        router.replace("/auth")
-        return
-      }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
 
       if (!session?.user) {
-        console.log("Pas de session user")
         router.replace("/auth")
         return
       }
 
-      // Récupère le profil dans la table users
-      const { data: userProfile, error: profileError } = await supabase
+      const { data: profile, error } = await supabase
         .from("users")
-        .select("*")
+        .select("role")
         .eq("auth_id", session.user.id)
         .single()
 
-      if (profileError || !userProfile) {
-        console.log("Erreur profil ou profil introuvable :", profileError)
+      if (error || !profile) {
         router.replace("/auth")
         return
       }
 
-      // Détermine les rôles
-      const newRoles: Roles = {
-        admin: userProfile.role === "admin",
-        club_admin: userProfile.role === "club_admin",
-        player: userProfile.role === "player",
-        captain: userProfile.is_captain || false, // si tu as un champ is_captain
+      const userRoles: Roles = {
+        admin: profile.role === "admin",
+        player: profile.role === "player",
+        captain: profile.role === "captain" || false, // si tu as un champ spécifique captain
       }
 
-      setRoles(newRoles)
+      // Si aucun rôle valide, renvoie sur auth
+      if (!userRoles.admin && !userRoles.player && !userRoles.captain) {
+        router.replace("/auth")
+        return
+      }
+
+      setRoles(userRoles)
       setLoading(false)
     }
 
@@ -77,46 +78,30 @@ export default function DashboardPage() {
     </div>
   )
 
+  const panels: { key: keyof Roles; label: string; component: JSX.Element }[] = [
+    { key: "admin", label: "Admin", component: <AdminDashboard /> },
+    { key: "player", label: "Joueur", component: <PlayerDashboard /> },
+    { key: "captain", label: "Capitaine", component: <CaptainDashboard /> },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {roles.admin && (
-          <a
-            href="/dashboard/admin"
-            className="bg-yellow-500 hover:bg-yellow-600 p-6 rounded shadow text-black font-bold text-xl text-center"
-          >
-            Admin
-          </a>
-        )}
 
-        {roles.club_admin && (
-          <a
-            href="/dashboard/club_admin"
-            className="bg-green-500 hover:bg-green-600 p-6 rounded shadow text-black font-bold text-xl text-center"
-          >
-            Responsable Club
-          </a>
-        )}
-
-        {roles.player && (
-          <a
-            href="/dashboard/player"
-            className="bg-blue-500 hover:bg-blue-600 p-6 rounded shadow text-black font-bold text-xl text-center"
-          >
-            Joueur
-          </a>
-        )}
-
-        {roles.captain && (
-          <a
-            href="/dashboard/captain"
-            className="bg-purple-500 hover:bg-purple-600 p-6 rounded shadow text-black font-bold text-xl text-center"
-          >
-            Capitaine
-          </a>
-        )}
+      <div className="space-y-4">
+        {panels.map(panel => roles[panel.key] && (
+          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
+            <button
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
+            >
+              {panel.label}
+            </button>
+            <div className={`transition-max-h duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[2000px]' : 'max-h-0'}`}>
+              {openPanel === panel.key && panel.component}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
