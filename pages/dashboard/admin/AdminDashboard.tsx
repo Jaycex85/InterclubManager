@@ -13,16 +13,35 @@ const PlayersIndex = () => (
   </div>
 )
 
-type PanelKey = "clubs" | "teams" | "players" | null
+type PanelKey = "clubs" | "teams" | "players"
 
 export default function AdminDashboard() {
-  const [openPanel, setOpenPanel] = useState<PanelKey>(null)
+  // Panels ouverts (multi)
+  const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
 
-  const togglePanel = (panel: PanelKey) => {
-    setOpenPanel(prev => (prev === panel ? null : panel))
+  // Refs pour chaque panel pour scroll
+  const panelRefs = {
+    clubs: useRef<HTMLDivElement>(null),
+    teams: useRef<HTMLDivElement>(null),
+    players: useRef<HTMLDivElement>(null),
   }
 
-  // Hook pour gérer l'animation du slide
+  const togglePanel = (panel: PanelKey) => {
+    setOpenPanels(prev =>
+      prev.includes(panel) ? prev.filter(p => p !== panel) : [...prev, panel]
+    )
+  }
+
+  // Scroll vers le panel ouvert
+  useEffect(() => {
+    openPanels.forEach(panel => {
+      const ref = panelRefs[panel].current
+      if (ref) {
+        ref.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+    })
+  }, [openPanels])
+
   const useSlideDown = (isOpen: boolean) => {
     const ref = useRef<HTMLDivElement>(null)
     const [height, setHeight] = useState<string>("0px")
@@ -55,10 +74,11 @@ export default function AdminDashboard() {
 
       <div className="space-y-4 md:space-y-6">
         {panels.map(({ key, label, component, color }) => {
-          const { ref, style } = useSlideDown(openPanel === key)
+          const isOpen = openPanels.includes(key)
+          const { ref, style } = useSlideDown(isOpen)
 
           return (
-            <div key={key}>
+            <div key={key} ref={panelRefs[key]}>
               <button
                 onClick={() => togglePanel(key)}
                 className={`w-full ${color} p-4 md:p-6 rounded shadow text-black font-bold text-xl flex justify-between items-center`}
@@ -66,7 +86,7 @@ export default function AdminDashboard() {
                 <span>{label}</span>
                 <span
                   className={`ml-2 transform transition-transform duration-300 ${
-                    openPanel === key ? "rotate-180" : ""
+                    isOpen ? "rotate-180" : ""
                   }`}
                 >
                   ▼
