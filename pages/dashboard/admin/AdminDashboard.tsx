@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { supabase } from '../../utils/supabaseClient'
+import { supabase } from '../../../utils/supabaseClient'
 
 // Imports dynamiques des formulaires imbriqués
-const ClubForm = dynamic(() => import('./clubs/[id]'), { ssr: false })
-const TeamForm = dynamic(() => import('./teams/[id]'), { ssr: false })
+const ClubForm = dynamic(() => import('./clubs/EditClub'), { ssr: false })
+const TeamForm = dynamic(() => import('./teams/EditTeam'), { ssr: false })
 const EditUser = dynamic(() => import('./users/EditUser'), { ssr: false })
 
 type PanelKey = 'clubs' | 'teams' | 'users'
