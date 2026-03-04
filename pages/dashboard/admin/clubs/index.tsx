@@ -1,19 +1,31 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 import EditClub from './EditClub'
 
-type Club = {
-  id: string
-  name: string
-  city: string | null
-}
+type Club = { id: string; name: string; city: string | null }
 
 export default function AdminClubsPage() {
   const [clubs, setClubs] = useState<Club[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedClubId, setSelectedClubId] = useState<string | null>(null)
+  const [openClubId, setOpenClubId] = useState<string | null>(null)
+
+  // slide-down hook
+  const useSlideDown = (isOpen: boolean) => {
+    const ref = useRef<HTMLDivElement>(null)
+    const [height, setHeight] = useState('0px')
+
+    useEffect(() => {
+      if (ref.current) {
+        setTimeout(() => {
+          setHeight(isOpen ? `${ref.current!.scrollHeight}px` : '0px')
+        }, 0)
+      }
+    }, [isOpen, ref.current?.scrollHeight])
+
+    return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
+  }
 
   const fetchClubs = async () => {
     setLoading(true)
@@ -26,42 +38,22 @@ export default function AdminClubsPage() {
     fetchClubs()
   }, [])
 
+  const toggleClub = (id: string) => {
+    setOpenClubId(prev => (prev === id ? null : id))
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer ce club ?')) return
     await supabase.from('clubs').delete().eq('id', id)
     fetchClubs()
   }
 
-  // 🔥 MODE FORMULAIRE
-  if (selectedClubId) {
-    return (
-      <div className="bg-gray-900 text-gray-100 p-6 rounded">
-        <button
-          onClick={() => setSelectedClubId(null)}
-          className="mb-6 text-yellow-400 hover:underline"
-        >
-          ← Retour à la liste
-        </button>
-
-        <EditClub
-          clubId={selectedClubId}
-          onClose={() => setSelectedClubId(null)}
-          onSaved={fetchClubs}
-        />
-      </div>
-    )
-  }
-
-  // 🔵 MODE LISTE
   return (
-    <div className="bg-gray-900 text-gray-100 p-6 rounded">
+    <div className="bg-gray-900 text-gray-100 p-6 rounded min-h-screen">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-yellow-500">
-          Gestion des Clubs
-        </h1>
-
+        <h1 className="text-3xl font-bold text-yellow-500">Gestion des Clubs</h1>
         <button
-          onClick={() => setSelectedClubId('new')}
+          onClick={() => setOpenClubId('new')}
           className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
         >
           Ajouter un club
@@ -72,33 +64,37 @@ export default function AdminClubsPage() {
         <p>Chargement...</p>
       ) : (
         <ul className="space-y-4">
-          {clubs.map((club) => (
-            <li
-              key={club.id}
-              className="p-4 bg-gray-800 rounded shadow flex justify-between items-center"
-            >
-              <div>
-                <p className="font-bold text-lg">{club.name}</p>
-                <p className="text-gray-400 text-sm">{club.city}</p>
-              </div>
+          {clubs.map(club => {
+            const { ref, style } = useSlideDown(openClubId === club.id)
+            return (
+              <li key={club.id} className="bg-gray-800 rounded shadow">
+                <div className="flex justify-between items-center p-4 bg-gray-700 hover:bg-gray-600 cursor-pointer">
+                  <div onClick={() => toggleClub(club.id)}>
+                    <p className="font-bold text-lg">{club.name}</p>
+                    <p className="text-gray-400 text-sm">{club.city}</p>
+                  </div>
+                  <span
+                    className={`ml-2 transform transition-transform duration-300 ${
+                      openClubId === club.id ? 'rotate-180' : ''
+                    }`}
+                    onClick={() => toggleClub(club.id)}
+                  >
+                    ▼
+                  </span>
+                </div>
 
-              <div className="flex gap-2">
-                <button
-                  className="bg-yellow-500 text-black px-3 py-1 rounded hover:bg-yellow-600"
-                  onClick={() => setSelectedClubId(club.id)}
-                >
-                  Voir / Éditer
-                </button>
-
-                <button
-                  className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                  onClick={() => handleDelete(club.id)}
-                >
-                  Supprimer
-                </button>
-              </div>
-            </li>
-          ))}
+                <div ref={ref} style={style} className="p-4 bg-gray-600">
+                  {openClubId === club.id && (
+                    <EditClub
+                      clubId={club.id}
+                      onSaved={fetchClubs}
+                      onClose={() => setOpenClubId(null)}
+                    />
+                  )}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
