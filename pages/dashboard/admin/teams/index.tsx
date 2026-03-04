@@ -56,6 +56,27 @@ export default function AdminTeamsPage() {
     fetchTeams()
   }
 
+  // 🔥 MODE FORMULAIRE PLEIN ÉCRAN
+  if (selectedTeamId) {
+    return (
+      <div className="bg-gray-900 text-gray-100 p-6 rounded">
+        <button
+          onClick={() => setSelectedTeamId(null)}
+          className="mb-6 text-yellow-400 hover:underline"
+        >
+          ← Retour à la liste
+        </button>
+
+        <EditTeam
+          teamId={selectedTeamId}
+          onClose={() => setSelectedTeamId(null)}
+          onSaved={fetchTeams}
+        />
+      </div>
+    )
+  }
+
+  // 🔵 MODE LISTE
   return (
     <div className="bg-gray-900 text-gray-100 p-6 rounded">
       <div className="flex justify-between items-center mb-6">
@@ -111,14 +132,6 @@ export default function AdminTeamsPage() {
             </li>
           ))}
         </ul>
-      )}
-
-      {selectedTeamId && (
-        <EditTeam
-          teamId={selectedTeamId}
-          onClose={() => setSelectedTeamId(null)}
-          onSaved={fetchTeams}
-        />
       )}
     </div>
   )
