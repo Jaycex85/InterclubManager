@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '../../../../../../utils/supabaseClient' // chemin relatif direct
+import { supabase } from '../../../../utils/supabaseClient' // ✅ chemin corrigé
 
 type Team = {
   id: string
@@ -19,7 +19,6 @@ export default function AdminTeamsPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  // Vérification rôle admin
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -34,7 +33,6 @@ export default function AdminTeamsPage() {
     checkUser()
   }, [router])
 
-  // Récupération des équipes
   const fetchTeams = async () => {
     setLoading(true)
     const { data, error } = await supabase
