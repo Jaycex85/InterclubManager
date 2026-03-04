@@ -10,7 +10,8 @@ type Team = {
   club_id: string
   club_name?: string
   category?: string
-  captain?: string
+  captain_id?: string
+  captain_email?: string
 }
 
 export default function AdminTeamsPage() {
@@ -18,15 +19,10 @@ export default function AdminTeamsPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
-  // Vérifie que l'utilisateur est admin
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        router.push('/auth')
-        return
-      }
-
+      if (!data.user) router.push('/auth')
       const { data: profile } = await supabase
         .from('users')
         .select('role')
@@ -37,12 +33,19 @@ export default function AdminTeamsPage() {
     checkUser()
   }, [router])
 
-  // Récupère la liste des équipes avec nom du club
   const fetchTeams = async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('teams')
-      .select('id, name, club_id, category, captain, club:club_id(name)')
+      .select(`
+        id,
+        name,
+        club_id,
+        category,
+        captain_id,
+        club:club_id(name),
+        captain:captain_id(email)
+      `)
       .order('name')
 
     if (error) console.error('Error fetching teams:', error)
@@ -54,7 +57,8 @@ export default function AdminTeamsPage() {
           club_id: t.club_id,
           club_name: t.club?.name || '',
           category: t.category,
-          captain: t.captain,
+          captain_id: t.captain_id,
+          captain_email: t.captain?.email || '',
         }))
       )
 
@@ -100,7 +104,9 @@ export default function AdminTeamsPage() {
                 <p className="text-gray-400 text-sm">
                   Club: {team.club_name} {team.category ? `- ${team.category}` : ''}
                 </p>
-                {team.captain && <p className="text-gray-400 text-sm">Capitaine: {team.captain}</p>}
+                {team.captain_email && (
+                  <p className="text-gray-400 text-sm">Capitaine: {team.captain_email}</p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
