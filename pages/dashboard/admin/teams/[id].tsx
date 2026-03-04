@@ -22,14 +22,17 @@ type User = {
   email: string
 }
 
-export default function TeamFormPage({ params }: { params: { id: string } }) {
+export default function TeamFormPage() {
+  const router = useRouter()
+  const { id } = router.query
+  const isNew = id === 'new'
+
   const [team, setTeam] = useState<Team>({ name: '', club_id: '', category: '', captain_id: '' })
   const [clubs, setClubs] = useState<Club[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const isNew = params.id === 'new'
 
+  // Vérifie que l'utilisateur est admin
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
@@ -45,29 +48,30 @@ export default function TeamFormPage({ params }: { params: { id: string } }) {
     checkUser()
   }, [router])
 
+  // Récupère clubs et users pour les dropdowns
   useEffect(() => {
     const fetchClubs = async () => {
       const { data } = await supabase.from('clubs').select('id, name').order('name')
       if (data) setClubs(data)
     }
-    fetchClubs()
-
     const fetchUsers = async () => {
       const { data } = await supabase.from('users').select('id, email').order('email')
       if (data) setUsers(data)
     }
+    fetchClubs()
     fetchUsers()
   }, [])
 
+  // Récupère l'équipe si on édite
   useEffect(() => {
-    if (!isNew) {
+    if (!isNew && id) {
       const fetchTeam = async () => {
-        const { data } = await supabase.from('teams').select('*').eq('id', params.id).single()
+        const { data } = await supabase.from('teams').select('*').eq('id', id).single()
         if (data) setTeam(data)
       }
       fetchTeam()
     }
-  }, [params.id, isNew])
+  }, [id, isNew])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setTeam({ ...team, [e.target.name]: e.target.value })
@@ -80,8 +84,8 @@ export default function TeamFormPage({ params }: { params: { id: string } }) {
       const { error } = await supabase.from('teams').insert([team])
       if (error) alert(error.message)
       else router.push('/dashboard/admin/teams')
-    } else {
-      const { error } = await supabase.from('teams').update(team).eq('id', params.id)
+    } else if (id) {
+      const { error } = await supabase.from('teams').update(team).eq('id', id)
       if (error) alert(error.message)
       else router.push('/dashboard/admin/teams')
     }
