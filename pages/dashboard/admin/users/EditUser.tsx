@@ -6,7 +6,7 @@ import { supabase } from '../../../../utils/supabaseClient'
 export type EditUserProps = {
   userId: string
   onSaved: () => void
-  onClose?: () => void // optionnel pour permettre le build partout
+  onClose?: () => void // <-- optionnel pour ne pas casser le build
 }
 
 type ClubMembership = {
