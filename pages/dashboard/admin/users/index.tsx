@@ -13,7 +13,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [openUserId, setOpenUserId] = useState<string | null>(null)
-  const containerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const containerRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   useEffect(() => {
     const checkAdmin = async () => {
@@ -47,13 +47,6 @@ export default function AdminUsersPage() {
     setOpenUserId(prev => (prev === userId ? null : userId))
   }
 
-  useEffect(() => {
-    if (openUserId && containerRefs.current[openUserId]) {
-      const el = containerRefs.current[openUserId]
-      el!.style.maxHeight = el!.scrollHeight + 'px'
-    }
-  }, [openUserId])
-
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-500 mb-6">Gestion des Utilisateurs</h1>
@@ -80,8 +73,12 @@ export default function AdminUsersPage() {
               </button>
 
               <div
-                ref={el => (containerRefs.current[user.id] = el)}
-                style={{ overflow: 'hidden', maxHeight: openUserId === user.id ? undefined : 0, transition: 'max-height 0.35s ease' }}
+                ref={el => { containerRefs.current[user.id] = el }}
+                style={{ 
+                  overflow: 'hidden', 
+                  maxHeight: openUserId === user.id ? containerRefs.current[user.id]?.scrollHeight : 0, 
+                  transition: 'max-height 0.35s ease' 
+                }}
               >
                 {openUserId === user.id && (
                   <div className="p-4 bg-gray-700">
