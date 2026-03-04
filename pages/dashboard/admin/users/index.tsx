@@ -12,7 +12,7 @@ type User = {
   last_name?: string
 }
 
-// Import dynamique avec typage
+// Import dynamique
 const EditUser = dynamic<EditUserProps>(() => import('./EditUser'), { ssr: false })
 
 export default function AdminUsersPage() {
@@ -94,6 +94,7 @@ export default function AdminUsersPage() {
                         fetchUsers()
                         setOpenUserId(null)
                       }}
+                      onClose={() => setOpenUserId(null)} // <-- ajouté pour build
                     />
                   </div>
                 )}
