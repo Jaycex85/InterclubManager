@@ -32,6 +32,27 @@ export default function AdminClubsPage() {
     fetchClubs()
   }
 
+  // 🔥 MODE FORMULAIRE
+  if (selectedClubId) {
+    return (
+      <div className="bg-gray-900 text-gray-100 p-6 rounded">
+        <button
+          onClick={() => setSelectedClubId(null)}
+          className="mb-6 text-yellow-400 hover:underline"
+        >
+          ← Retour à la liste
+        </button>
+
+        <EditClub
+          clubId={selectedClubId}
+          onClose={() => setSelectedClubId(null)}
+          onSaved={fetchClubs}
+        />
+      </div>
+    )
+  }
+
+  // 🔵 MODE LISTE
   return (
     <div className="bg-gray-900 text-gray-100 p-6 rounded">
       <div className="flex justify-between items-center mb-6">
@@ -79,14 +100,6 @@ export default function AdminClubsPage() {
             </li>
           ))}
         </ul>
-      )}
-
-      {selectedClubId && (
-        <EditClub
-          clubId={selectedClubId}
-          onClose={() => setSelectedClubId(null)}
-          onSaved={fetchClubs}
-        />
       )}
     </div>
   )
