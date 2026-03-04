@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { supabase } from '@/utils/supabaseClient'
+import { supabase } from '../../../../../../utils/supabaseClient' // chemin relatif direct
 
 type Team = {
   id: string
@@ -23,10 +23,7 @@ export default function AdminTeamsPage() {
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getUser()
-      if (!data.user) {
-        router.push('/auth')
-        return
-      }
+      if (!data.user) router.push('/auth')
       const { data: profile, error } = await supabase
         .from('users')
         .select('role')
@@ -73,7 +70,6 @@ export default function AdminTeamsPage() {
     fetchTeams()
   }, [])
 
-  // Supprimer une équipe
   const handleDelete = async (id: string) => {
     if (!confirm('Voulez-vous vraiment supprimer cette équipe ?')) return
     const { error } = await supabase.from('teams').delete().eq('id', id)
