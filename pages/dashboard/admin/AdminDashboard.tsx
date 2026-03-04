@@ -23,6 +23,45 @@ type Team = {
 }
 type User = { id: string; email: string; first_name?: string; last_name?: string }
 
+type ExpandableItemProps = {
+  title: string
+  isOpen: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
+
+function ExpandableItem({ title, isOpen, onToggle, children }: ExpandableItemProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState('0px')
+
+  useEffect(() => {
+    if (!ref.current) return
+    const el = ref.current
+    const timeout = setTimeout(() => {
+      setHeight(isOpen ? `${el.scrollHeight}px` : '0px')
+    }, 0)
+    return () => clearTimeout(timeout)
+  }, [isOpen, ref.current?.scrollHeight])
+
+  return (
+    <div className="mb-4 border-b border-gray-600">
+      <button
+        className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
+        onClick={onToggle}
+      >
+        {title}
+      </button>
+      <div
+        ref={ref}
+        style={{ maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' }}
+        className="p-2 bg-gray-600 rounded mt-2"
+      >
+        {isOpen && children}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
   const [openClubId, setOpenClubId] = useState<string | null>(null)
@@ -33,79 +72,48 @@ export default function AdminDashboard() {
   const [teams, setTeams] = useState<Team[]>([])
   const [users, setUsers] = useState<User[]>([])
 
-  const panelRefs = {
-    clubs: useRef<HTMLDivElement>(null),
-    teams: useRef<HTMLDivElement>(null),
-    users: useRef<HTMLDivElement>(null),
-  }
-
-  const togglePanel = (panel: PanelKey) => {
-    setOpenPanels(prev =>
-      prev.includes(panel) ? prev.filter(p => p !== panel) : [...prev, panel]
-    )
-  }
-
-  /** FETCH FUNCTIONS */
-  const fetchClubs = async () => {
-    const { data, error } = await supabase.from('clubs').select('*').order('name')
-    if (!error) setClubs(data || [])
-  }
-
-  const fetchTeams = async () => {
-    const { data, error } = await supabase
-      .from('teams')
-      .select(`
-        id,
-        name,
-        club_id,
-        category,
-        captain_id,
-        club:club_id(name),
-        captain:captain_id(email)
-      `)
-      .order('name')
-    if (!error)
-      setTeams(
-        (data || []).map((t: any) => ({
-          id: t.id,
-          name: t.name,
-          club_id: t.club_id,
-          club_name: t.club?.name || '',
-          category: t.category,
-          captain_id: t.captain_id,
-          captain_email: t.captain?.email || '',
-        }))
-      )
-  }
-
-  const fetchUsers = async () => {
-    const { data, error } = await supabase.from('users').select('*').order('email')
-    if (!error) setUsers(data || [])
-  }
+  const togglePanel = (panel: PanelKey) =>
+    setOpenPanels(prev => (prev.includes(panel) ? prev.filter(p => p !== panel) : [...prev, panel]))
 
   useEffect(() => {
+    const fetchClubs = async () => {
+      const { data, error } = await supabase.from('clubs').select('*').order('name')
+      if (!error) setClubs(data || [])
+    }
+    const fetchTeams = async () => {
+      const { data, error } = await supabase
+        .from('teams')
+        .select(`
+          id,
+          name,
+          club_id,
+          category,
+          captain_id,
+          club:club_id(name),
+          captain:captain_id(email)
+        `)
+        .order('name')
+      if (!error)
+        setTeams(
+          (data || []).map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            club_id: t.club_id,
+            club_name: t.club?.name || '',
+            category: t.category,
+            captain_id: t.captain_id,
+            captain_email: t.captain?.email || '',
+          }))
+        )
+    }
+    const fetchUsers = async () => {
+      const { data, error } = await supabase.from('users').select('*').order('email')
+      if (!error) setUsers(data || [])
+    }
     fetchClubs()
     fetchTeams()
     fetchUsers()
   }, [])
-
-  /** HOOK DE SLIDE-DOWN */
-  const useSlideDown = (isOpen: boolean) => {
-    const ref = useRef<HTMLDivElement>(null)
-    const [height, setHeight] = useState('0px')
-
-    useEffect(() => {
-      if (!ref.current) return
-      const el = ref.current
-      // Timeout pour attendre le rendu des enfants dynamiques
-      const timeout = setTimeout(() => {
-        setHeight(isOpen ? `${el.scrollHeight}px` : '0px')
-      }, 0)
-      return () => clearTimeout(timeout)
-    }, [isOpen, ref.current?.scrollHeight])
-
-    return { ref, style: { maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' } }
-  }
 
   const panels: { key: PanelKey; label: string; color: string }[] = [
     { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
@@ -115,17 +123,12 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">
-        Admin Dashboard
-      </h1>
-
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">Admin Dashboard</h1>
       <div className="space-y-4 md:space-y-6">
         {panels.map(({ key, label, color }) => {
           const isOpen = openPanels.includes(key)
-          const { ref, style } = useSlideDown(isOpen)
-
           return (
-            <div key={key} ref={panelRefs[key]}>
+            <div key={key}>
               <button
                 onClick={() => togglePanel(key)}
                 className={`w-full ${color} p-4 md:p-6 rounded shadow text-black font-bold text-xl flex justify-between items-center`}
@@ -136,94 +139,91 @@ export default function AdminDashboard() {
                 </span>
               </button>
 
-              <div ref={ref} style={style} className="mt-2 bg-gray-800 rounded shadow">
-                <div className="p-4 md:p-6">
-                  {/* ---------- CLUBS ---------- */}
+              {isOpen && (
+                <div className="mt-2 bg-gray-800 rounded shadow p-4 md:p-6">
                   {key === 'clubs' &&
-                    clubs.map(club => {
-                      const { ref: clubRef, style: clubStyle } = useSlideDown(openClubId === club.id)
-                      return (
-                        <div key={club.id} className="mb-4 border-b border-gray-600">
-                          <button
-                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                            onClick={() => setOpenClubId(openClubId === club.id ? null : club.id)}
-                          >
-                            {club.name} {club.city ? `- ${club.city}` : ''}
-                          </button>
-                          <div ref={clubRef} style={clubStyle} className="p-2 bg-gray-600 rounded mt-2">
-                            {openClubId === club.id && (
-                              <ClubForm
-                                clubId={club.id}
-                                onSaved={async () => {
-                                  await fetchClubs()
-                                  setOpenClubId(null)
-                                }}
-                                onClose={() => setOpenClubId(null)}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    clubs.map(club => (
+                      <ExpandableItem
+                        key={club.id}
+                        title={`${club.name}${club.city ? ` - ${club.city}` : ''}`}
+                        isOpen={openClubId === club.id}
+                        onToggle={() => setOpenClubId(openClubId === club.id ? null : club.id)}
+                      >
+                        <ClubForm
+                          clubId={club.id}
+                          onSaved={async () => {
+                            const { data, error } = await supabase.from('clubs').select('*').order('name')
+                            if (!error) setClubs(data || [])
+                            setOpenClubId(null)
+                          }}
+                          onClose={() => setOpenClubId(null)}
+                        />
+                      </ExpandableItem>
+                    ))}
 
-                  {/* ---------- TEAMS ---------- */}
                   {key === 'teams' &&
-                    teams.map(team => {
-                      const { ref: teamRef, style: teamStyle } = useSlideDown(openTeamId === team.id)
-                      return (
-                        <div key={team.id} className="mb-4 border-b border-gray-600">
-                          <button
-                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                            onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
-                          >
-                            {team.name} - {team.club_name}
-                            {team.category ? ` - ${team.category}` : ''}
-                          </button>
-                          <div ref={teamRef} style={teamStyle} className="p-2 bg-gray-600 rounded mt-2">
-                            {openTeamId === team.id && (
-                              <TeamForm
-                                teamId={team.id}
-                                onSaved={async () => {
-                                  await fetchTeams()
-                                  setOpenTeamId(null)
-                                }}
-                                onClose={() => setOpenTeamId(null)}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    teams.map(team => (
+                      <ExpandableItem
+                        key={team.id}
+                        title={`${team.name} - ${team.club_name}${team.category ? ` - ${team.category}` : ''}`}
+                        isOpen={openTeamId === team.id}
+                        onToggle={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
+                      >
+                        <TeamForm
+                          teamId={team.id}
+                          onSaved={async () => {
+                            const { data, error } = await supabase
+                              .from('teams')
+                              .select(`
+                                id,
+                                name,
+                                club_id,
+                                category,
+                                captain_id,
+                                club:club_id(name),
+                                captain:captain_id(email)
+                              `)
+                              .order('name')
+                            if (!error)
+                              setTeams(
+                                (data || []).map((t: any) => ({
+                                  id: t.id,
+                                  name: t.name,
+                                  club_id: t.club_id,
+                                  club_name: t.club?.name || '',
+                                  category: t.category,
+                                  captain_id: t.captain_id,
+                                  captain_email: t.captain?.email || '',
+                                }))
+                              )
+                            setOpenTeamId(null)
+                          }}
+                          onClose={() => setOpenTeamId(null)}
+                        />
+                      </ExpandableItem>
+                    ))}
 
-                  {/* ---------- USERS ---------- */}
                   {key === 'users' &&
-                    users.map(user => {
-                      const { ref: userRef, style: userStyle } = useSlideDown(openUserId === user.id)
-                      return (
-                        <div key={user.id} className="mb-4 border-b border-gray-600">
-                          <button
-                            className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-                            onClick={() => setOpenUserId(openUserId === user.id ? null : user.id)}
-                          >
-                            {user.email} {user.first_name ? `- ${user.first_name} ${user.last_name || ''}` : ''}
-                          </button>
-                          <div ref={userRef} style={userStyle} className="p-2 bg-gray-600 rounded mt-2">
-                            {openUserId === user.id && (
-                              <EditUser
-                                userId={user.id}
-                                onSaved={async () => {
-                                  await fetchUsers()
-                                  setOpenUserId(null)
-                                }}
-                                onClose={() => setOpenUserId(null)}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                    users.map(user => (
+                      <ExpandableItem
+                        key={user.id}
+                        title={`${user.email}${user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}`}
+                        isOpen={openUserId === user.id}
+                        onToggle={() => setOpenUserId(openUserId === user.id ? null : user.id)}
+                      >
+                        <EditUser
+                          userId={user.id}
+                          onSaved={async () => {
+                            const { data, error } = await supabase.from('users').select('*').order('email')
+                            if (!error) setUsers(data || [])
+                            setOpenUserId(null)
+                          }}
+                          onClose={() => setOpenUserId(null)}
+                        />
+                      </ExpandableItem>
+                    ))}
                 </div>
-              </div>
+              )}
             </div>
           )
         })}
