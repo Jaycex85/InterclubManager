@@ -10,6 +10,7 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-icons": "^4.10.1",
     "next": "^13.5.11",
     "@supabase/supabase-js": "^2.25.0"
   }
