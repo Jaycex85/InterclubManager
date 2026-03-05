@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 
@@ -10,161 +10,136 @@ const TeamForm = dynamic(() => import('./teams/EditTeam'), { ssr: false })
 const EditUser = dynamic(() => import('./users/EditUser'), { ssr: false })
 
 type PanelKey = 'clubs' | 'teams' | 'users'
+
 type Club = { id: string; name: string; city?: string }
-type Team = { id: string; name: string; club_id: string; club_name?: string; category?: string; captain_id?: string; captain_email?: string }
+type Team = { id: string; name: string; club_id: string; club_name?: string; category?: string }
 type User = { id: string; email: string; first_name?: string; last_name?: string }
 
-type ExpandableItemProps = {
-  title: string
-  isOpen: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}
-
-function ExpandableItem({ title, isOpen, onToggle, children }: ExpandableItemProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState('0px')
-
-  useLayoutEffect(() => {
-    if (!ref.current) return
-    const el = ref.current
-    if (isOpen) {
-      // recalculer après rendu complet
-      const id = requestAnimationFrame(() => setHeight(`${el.scrollHeight}px`))
-      return () => cancelAnimationFrame(id)
-    } else {
-      // tout fermé
-      setHeight('0px')
-    }
-  }, [isOpen])
-
-  return (
-    <div className="mb-4 border-b border-gray-600">
-      <button
-        className="w-full text-left font-bold p-2 bg-gray-700 hover:bg-gray-600"
-        onClick={onToggle}
-      >
-        {title}
-      </button>
-      <div
-        ref={ref}
-        style={{ maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' }}
-        className={`${isOpen ? 'p-2' : 'p-0'} bg-gray-600 rounded mt-2`}
-      >
-        {isOpen && children} {/* ✅ Ne jamais rendre le contenu si fermé */}
-      </div>
-    </div>
-  )
-}
-
 export default function AdminDashboard() {
-  const [openPanels, setOpenPanels] = useState<PanelKey[]>([])
-  const [openClubId, setOpenClubId] = useState<string | null>(null)
-  const [openTeamId, setOpenTeamId] = useState<string | null>(null)
-  const [openUserId, setOpenUserId] = useState<string | null>(null)
-
   const [clubs, setClubs] = useState<Club[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [users, setUsers] = useState<User[]>([])
 
-  const togglePanel = (panel: PanelKey) => {
-    setOpenPanels(prev =>
-      prev.includes(panel) ? prev.filter(p => p !== panel) : [...prev, panel]
-    )
+  const [openPanel, setOpenPanel] = useState<PanelKey | null>(null)
+  const [openModal, setOpenModal] = useState<{ type: PanelKey; id: string } | null>(null)
+
+  /** FETCH FUNCTIONS */
+  const fetchClubs = async () => {
+    const { data, error } = await supabase.from('clubs').select('*').order('name')
+    if (!error) setClubs(data || [])
   }
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      const { data: clubData } = await supabase.from('clubs').select('*').order('name')
-      setClubs(clubData || [])
-      const { data: teamData } = await supabase
-        .from('teams')
-        .select(`
-          id,name,club_id,category,captain_id,
-          club:club_id(name),
-          captain:captain_id(email)
-        `)
-        .order('name')
+  const fetchTeams = async () => {
+    const { data, error } = await supabase
+      .from('teams')
+      .select(`
+        id,
+        name,
+        club_id,
+        category,
+        club:club_id(name)
+      `)
+      .order('name')
+    if (!error)
       setTeams(
-        (teamData || []).map((t: any) => ({
+        (data || []).map((t: any) => ({
           id: t.id,
           name: t.name,
           club_id: t.club_id,
           club_name: t.club?.name || '',
           category: t.category,
-          captain_id: t.captain_id,
-          captain_email: t.captain?.email || ''
         }))
       )
-      const { data: userData } = await supabase.from('users').select('*').order('email')
-      setUsers(userData || [])
-    }
-    fetchAll()
+  }
+
+  const fetchUsers = async () => {
+    const { data, error } = await supabase.from('users').select('*').order('email')
+    if (!error) setUsers(data || [])
+  }
+
+  useEffect(() => {
+    fetchClubs()
+    fetchTeams()
+    fetchUsers()
   }, [])
 
-  const panels: { key: PanelKey; label: string; color: string }[] = [
-    { key: 'clubs', label: 'Clubs', color: 'bg-yellow-500 hover:bg-yellow-600' },
-    { key: 'teams', label: 'Teams', color: 'bg-green-500 hover:bg-green-600' },
-    { key: 'users', label: 'Users', color: 'bg-blue-500 hover:bg-blue-600' }
+  const panels: { key: PanelKey; label: string; items: { id: string; title: string }[] }[] = [
+    { key: 'clubs', label: 'Clubs', items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })) },
+    { key: 'teams', label: 'Teams', items: teams.map(t => ({ id: t.id, title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}` })) },
+    { key: 'users', label: 'Users', items: users.map(u => ({ id: u.id, title: u.first_name ? `${u.email} - ${u.first_name} ${u.last_name || ''}` : u.email })) },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">
-        Admin Dashboard
-      </h1>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Admin Dashboard</h1>
 
-      <div className="space-y-4 md:space-y-6">
-        {panels.map(({ key, label, color }) => {
-          const isOpen = openPanels.includes(key)
-          return (
-            <div key={key}>
-              <button
-                onClick={() => togglePanel(key)}
-                className={`w-full ${color} p-4 md:p-6 rounded shadow text-black font-bold text-xl flex justify-between items-center`}
-              >
-                <span>{label}</span>
-                <span className={`ml-2 transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
-              </button>
+      <div className="space-y-4">
+        {panels.map(panel => (
+          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
+            {/* Panel header */}
+            <button
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
+              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
+            >
+              {panel.label}
+              <span className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
+            </button>
 
-              <div className={`mt-2 bg-gray-800 rounded shadow ${isOpen ? 'p-4 md:p-6' : 'p-0'}`}>
-                {key === 'clubs' && clubs.map(club =>
-                  <ExpandableItem
-                    key={club.id}
-                    title={`${club.name}${club.city ? ` - ${club.city}` : ''}`}
-                    isOpen={openClubId === club.id}
-                    onToggle={() => setOpenClubId(openClubId === club.id ? null : club.id)}
+            {/* Panel items */}
+            {openPanel === panel.key && (
+              <div className="p-4 grid gap-2">
+                {panel.items.map(item => (
+                  <button
+                    key={item.id}
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                    onClick={() => setOpenModal({ type: panel.key, id: item.id })}
                   >
-                    <ClubForm clubId={club.id} onSaved={async () => { setOpenClubId(null) }} onClose={() => setOpenClubId(null)} />
-                  </ExpandableItem>
-                )}
-
-                {key === 'teams' && teams.map(team =>
-                  <ExpandableItem
-                    key={team.id}
-                    title={`${team.name} - ${team.club_name}${team.category ? ` - ${team.category}` : ''}`}
-                    isOpen={openTeamId === team.id}
-                    onToggle={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
-                  >
-                    <TeamForm teamId={team.id} onSaved={async () => { setOpenTeamId(null) }} onClose={() => setOpenTeamId(null)} />
-                  </ExpandableItem>
-                )}
-
-                {key === 'users' && users.map(user =>
-                  <ExpandableItem
-                    key={user.id}
-                    title={`${user.email}${user.first_name ? ` - ${user.first_name} ${user.last_name || ''}` : ''}`}
-                    isOpen={openUserId === user.id}
-                    onToggle={() => setOpenUserId(openUserId === user.id ? null : user.id)}
-                  >
-                    <EditUser userId={user.id} onSaved={async () => { setOpenUserId(null) }} onClose={() => setOpenUserId(null)} />
-                  </ExpandableItem>
-                )}
+                    {item.title}
+                  </button>
+                ))}
               </div>
-            </div>
-          )
-        })}
+            )}
+          </div>
+        ))}
       </div>
+
+      {/* Modal */}
+      {openModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg">
+            <button
+              className="mb-4 text-red-400 hover:text-red-600 font-bold"
+              onClick={() => setOpenModal(null)}
+            >
+              Fermer ✕
+            </button>
+
+            {openModal.type === 'clubs' && (
+              <ClubForm
+                clubId={openModal.id}
+                onSaved={() => { fetchClubs(); setOpenModal(null) }}
+                onClose={() => setOpenModal(null)}
+              />
+            )}
+            {openModal.type === 'teams' && (
+              <TeamForm
+                teamId={openModal.id}
+                onSaved={() => { fetchTeams(); setOpenModal(null) }}
+                onClose={() => setOpenModal(null)}
+              />
+            )}
+            {openModal.type === 'users' && (
+              <EditUser
+                userId={openModal.id}
+                onSaved={() => { fetchUsers(); setOpenModal(null) }}
+                onClose={() => setOpenModal(null)}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
