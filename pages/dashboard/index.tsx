@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/router"
+import { useEffect, useState, useLayoutEffect, useRef } from "react"
 import dynamic from "next/dynamic"
 import { createClient } from "@supabase/supabase-js"
 
@@ -11,20 +10,6 @@ const supabase = createClient(
 )
 
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
-
-const PlayerDashboardTile = ({ clubName, role }: { clubName: string, role: string }) => (
-  <div className="bg-gray-800 p-4 rounded shadow">
-    <h2 className="font-bold text-lg">{clubName}</h2>
-    <p>Rôle : {role}</p>
-  </div>
-)
-
-const CaptainDashboardTile = ({ clubName, role }: { clubName: string, role: string }) => (
-  <div className="bg-gray-800 p-4 rounded shadow">
-    <h2 className="font-bold text-lg">{clubName}</h2>
-    <p>Rôle : {role}</p>
-  </div>
-)
 
 type Roles = {
   admin: boolean
@@ -39,8 +24,46 @@ type Membership = {
   role: "player" | "captain" | "club_admin"
 }
 
+type ExpandableItemProps = {
+  title: string
+  isOpen: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
+
+function ExpandableItem({ title, isOpen, onToggle, children }: ExpandableItemProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState('0px')
+
+  useLayoutEffect(() => {
+    if (!ref.current) return
+    const el = ref.current
+    const id = requestAnimationFrame(() => {
+      setHeight(isOpen ? `${el.scrollHeight}px` : '0px')
+    })
+    return () => cancelAnimationFrame(id)
+  }, [isOpen, children])
+
+  return (
+    <div className="mb-4 border-b border-gray-700 rounded overflow-hidden">
+      <button
+        className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+        onClick={onToggle}
+      >
+        {title}
+      </button>
+      <div
+        ref={ref}
+        style={{ maxHeight: height, overflow: 'hidden', transition: 'max-height 0.35s ease' }}
+        className="p-2 bg-gray-700 mt-2 rounded"
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardIndex() {
-  const router = useRouter()
   const [roles, setRoles] = useState<Roles>({ admin: false, player: false, captain: false, club_admin: false })
   const [loading, setLoading] = useState(true)
   const [openPanel, setOpenPanel] = useState<keyof Roles | null>(null)
@@ -49,20 +72,15 @@ export default function DashboardIndex() {
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) {
-        router.replace("/auth")
-        return
-      }
+      if (!session?.user) return setLoading(false)
 
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("id, role")
         .eq("auth_id", session.user.id)
         .single()
-      if (userError || !userData) {
-        router.replace("/auth")
-        return
-      }
+
+      if (userError || !userData) return setLoading(false)
 
       const userId = userData.id
       const globalRole = userData.role
@@ -92,7 +110,7 @@ export default function DashboardIndex() {
     }
 
     checkUser()
-  }, [router])
+  }, [])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
@@ -100,41 +118,47 @@ export default function DashboardIndex() {
     </div>
   )
 
-  const panels: { key: keyof Roles; label: string; component: JSX.Element }[] = [
-    { key: "admin", label: "Admin", component: <AdminDashboard /> },
-    { key: "player", label: "Joueur", component: (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        {memberships.filter(m => m.role === "player").map(m => (
-          <PlayerDashboardTile key={m.club_id} clubName={m.club_name} role={m.role} />
-        ))}
-      </div>
-    ) },
-    { key: "captain", label: "Capitaine", component: (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        {memberships.filter(m => m.role === "captain").map(m => (
-          <CaptainDashboardTile key={m.club_id} clubName={m.club_name} role={m.role} />
-        ))}
-      </div>
-    ) },
-  ]
-
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
 
       <div className="space-y-4">
-        {panels.map(panel => roles[panel.key] && (
-          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
-            <button
-              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
-            >
-              {panel.label}
-            </button>
-            <div className={`transition-all duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[5000px]' : 'max-h-0'}`}>
-              {openPanel === panel.key && panel.component}
+        {roles.admin && (
+          <ExpandableItem
+            title="Admin"
+            isOpen={openPanel === 'admin'}
+            onToggle={() => setOpenPanel(openPanel === 'admin' ? null : 'admin')}
+          >
+            <AdminDashboard />
+          </ExpandableItem>
+        )}
+
+        {roles.player && memberships.filter(m => m.role === "player").map(m => (
+          <ExpandableItem
+            key={`player-${m.club_id}`}
+            title={`Joueur - ${m.club_name}`}
+            isOpen={openPanel === `player-${m.club_id}`}
+            onToggle={() => setOpenPanel(openPanel === `player-${m.club_id}` ? null : `player-${m.club_id}`)}
+          >
+            <div className="p-2">
+              {/* Ici tu pourras mettre le composant PlayerForm ou autre */}
+              <p>Contenu du dashboard joueur pour {m.club_name}</p>
             </div>
-          </div>
+          </ExpandableItem>
+        ))}
+
+        {roles.captain && memberships.filter(m => m.role === "captain").map(m => (
+          <ExpandableItem
+            key={`captain-${m.club_id}`}
+            title={`Capitaine - ${m.club_name}`}
+            isOpen={openPanel === `captain-${m.club_id}`}
+            onToggle={() => setOpenPanel(openPanel === `captain-${m.club_id}` ? null : `captain-${m.club_id}`)}
+          >
+            <div className="p-2">
+              {/* Ici tu pourras mettre le composant CaptainForm ou autre */}
+              <p>Contenu du dashboard capitaine pour {m.club_name}</p>
+            </div>
+          </ExpandableItem>
         ))}
       </div>
     </div>
