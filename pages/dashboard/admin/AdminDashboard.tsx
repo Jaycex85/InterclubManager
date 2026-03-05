@@ -62,26 +62,37 @@ export default function AdminDashboard() {
   }, [])
 
   /** PANEL DEFINITIONS */
-  const panels: { key: PanelKey; label: string; icon: JSX.Element; items: { id: string; title: string }[] }[] = [
+  const panels: {
+    key: PanelKey
+    label: string
+    icon: JSX.Element
+    color: string
+    items: { id: string; title: string }[]
+  }[] = [
     {
       key: 'clubs',
       label: 'Clubs',
       icon: <FaBuilding className="inline mr-2" />,
+      color: 'bg-green-700 hover:bg-green-600',
       items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })),
     },
     {
       key: 'teams',
       label: 'Teams',
       icon: <MdSportsTennis className="inline mr-2" />,
-      items: teams.map(t => ({
-        id: t.id,
-        title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}`,
-      })),
+      color: 'bg-blue-700 hover:bg-blue-600',
+      items: teams.map(t => {
+        // Evite doublon si club a même nom
+        const clubPart = t.club_name && t.club_name !== t.name ? ` - ${t.club_name}` : ''
+        const categoryPart = t.category ? ` - ${t.category}` : ''
+        return { id: t.id, title: `${t.name}${clubPart}${categoryPart}` }
+      }),
     },
     {
       key: 'users',
       label: 'Users',
       icon: <FaUsers className="inline mr-2" />,
+      color: 'bg-yellow-500 hover:bg-yellow-400',
       items: users.map(u => ({
         id: u.id,
         title: u.first_name ? `${u.first_name} ${u.last_name || ''} - ${u.email}` : u.email,
@@ -91,14 +102,17 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">
+        Admin Dashboard
+      </h1>
 
       <div className="space-y-4">
         {panels.map(panel => (
           <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
             {/* Panel header */}
             <button
-              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex items-center justify-between"
+              className="w-full text-left p-4 flex items-center justify-between font-bold"
+              style={{ backgroundColor: panel.key === 'clubs' ? '#166534' : panel.key === 'teams' ? '#1e40af' : '#f59e0b' }}
               onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
               <span className="flex items-center">{panel.icon} {panel.label}</span>
@@ -113,7 +127,7 @@ export default function AdminDashboard() {
                 {panel.items.map(item => (
                   <button
                     key={item.id}
-                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                    className={`w-full text-left p-2 rounded ${panel.color} text-white font-medium transition-colors`}
                     onClick={() => setOpenModal({ type: panel.key, id: item.id })}
                   >
                     {item.title}
