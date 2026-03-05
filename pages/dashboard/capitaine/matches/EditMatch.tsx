@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 
 type MatchFormProps = {
-  matchId?: string         // édition si présent
+  matchId?: string         // si édition
   teamId?: string          // pré-sélection si création
   onSaved: () => void
   onClose: () => void
@@ -19,65 +19,40 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const [matchDate, setMatchDate] = useState('')
   const [matchTime, setMatchTime] = useState('')
   const [locationType, setLocationType] = useState<'domicile' | 'exterieur'>('domicile')
-  const [clubaddress, setclubaddress] = useState('')
+  const [clubaddress, setClubaddress] = useState('')
   const [compositionValidated, setCompositionValidated] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState('')
 
-  // Fetch teams que le user peut gérer (captain)
+  // Fetch teams pour le select
   const fetchTeams = async () => {
-    const {
-      data: sessionData,
-      error: sessionError
-    } = await supabase.auth.getSession()
-
-    if (sessionError || !sessionData.session?.user) {
-      setErrorMsg('Utilisateur non connecté')
-      setLoading(false)
-      return
-    }
-
-    const userId = sessionData.session.user.id
-
-    const { data, error } = await supabase
-      .from('team_memberships')
-      .select(`team_id, teams(id, name)`)
-      .eq('user_id', userId)
-      .eq('role', 'captain')
-
-    if (error) {
-      setErrorMsg(error.message)
-    } else if (data) {
-      setTeams(data.map((m: any) => ({ id: m.team_id, name: m.teams.name })))
-      if (!teamSelected && data.length) setTeamSelected(data[0].team_id)
-    }
-
-    setLoading(false)
+    const { data, error } = await supabase.from('teams').select('*').order('name')
+    if (error) console.error(error)
+    if (data) setTeams(data)
   }
 
   // Fetch match si édition
   const fetchMatch = async () => {
-    if (!matchId) return
-    const { data, error } = await supabase
-      .from('matches')
-      .select('*')
-      .eq('id', matchId)
-      .single()
-
-    if (error) {
-      setErrorMsg(error.message)
+    if (!matchId || matchId === 'new') {
+      setLoading(false)
       return
     }
 
+    const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
+    if (error) {
+      console.error(error)
+      setErrorMsg('Impossible de charger le match.')
+    }
     if (data) {
       setTeamSelected(data.team_id)
       setOpponent(data.opponent)
       setMatchDate(data.match_date)
       setMatchTime(data.match_time)
       setLocationType(data.location_type)
-      setclubaddress(data.clubaddress || '')
+      setClubaddress(data.clubaddress || '')
       setCompositionValidated(data.composition_validated)
     }
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -87,46 +62,50 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrorMsg(null)
-    if (!teamSelected) {
-      setErrorMsg('Veuillez sélectionner une équipe')
+    setErrorMsg('')
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      setErrorMsg("Utilisateur non connecté")
       return
     }
 
-    const payload = {
+    const payload: any = {
       team_id: teamSelected,
       opponent,
       match_date: matchDate,
       match_time: matchTime,
       location_type: locationType,
-      clubaddress: clubaddress,
+      clubaddress,
       composition_validated: compositionValidated,
       updated_at: new Date().toISOString(),
     }
 
-    try {
-      let response
-      if (matchId) {
-        response = await supabase.from('matches').update(payload).eq('id', matchId).select()
-      } else {
-        response = await supabase.from('matches').insert(payload).select()
+    // pour insert, on ajoute created_by
+    if (!matchId || matchId === 'new') {
+      payload.created_by = session.user.id
+      const { error } = await supabase.from('matches').insert(payload)
+      if (error) {
+        console.error(error)
+        setErrorMsg(error.message)
+        return
       }
-
-      if (response.error) {
-        setErrorMsg(response.error.message)
-      } else {
-        onSaved()
+    } else {
+      const { error } = await supabase.from('matches').update(payload).eq('id', matchId)
+      if (error) {
+        console.error(error)
+        setErrorMsg(error.message)
+        return
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Erreur inconnue')
     }
+
+    onSaved()
   }
 
   if (loading) return <div>Chargement...</div>
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {errorMsg && <div className="text-red-400 font-bold">{errorMsg}</div>}
+      {errorMsg && <div className="text-red-500 font-bold">{errorMsg}</div>}
 
       <div>
         <label className="block mb-1">Équipe</label>
@@ -134,12 +113,11 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
           value={teamSelected}
           onChange={e => setTeamSelected(e.target.value)}
           className="w-full p-2 rounded bg-gray-700 text-white"
+          required
         >
           <option value="">-- Sélectionnez une équipe --</option>
           {teams.map(t => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
+            <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
       </div>
@@ -151,6 +129,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
           value={opponent}
           onChange={e => setOpponent(e.target.value)}
           className="w-full p-2 rounded bg-gray-700 text-white"
+          required
         />
       </div>
 
@@ -162,6 +141,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
             value={matchDate}
             onChange={e => setMatchDate(e.target.value)}
             className="w-full p-2 rounded bg-gray-700 text-white"
+            required
           />
         </div>
         <div>
@@ -171,6 +151,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
             value={matchTime}
             onChange={e => setMatchTime(e.target.value)}
             className="w-full p-2 rounded bg-gray-700 text-white"
+            required
           />
         </div>
       </div>
@@ -181,6 +162,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
           value={locationType}
           onChange={e => setLocationType(e.target.value as 'domicile' | 'exterieur')}
           className="w-full p-2 rounded bg-gray-700 text-white"
+          required
         >
           <option value="domicile">Domicile</option>
           <option value="exterieur">Extérieur</option>
@@ -188,11 +170,11 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       </div>
 
       <div>
-        <label className="block mb-1">Addresse du club (optionnel)</label>
+        <label className="block mb-1">Adresse du club (optionnel)</label>
         <input
           type="text"
           value={clubaddress}
-          onChange={e => setclubaddress(e.target.value)}
+          onChange={e => setClubaddress(e.target.value)}
           className="w-full p-2 rounded bg-gray-700 text-white"
         />
       </div>
