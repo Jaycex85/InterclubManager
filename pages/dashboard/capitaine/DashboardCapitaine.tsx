@@ -17,7 +17,7 @@ type Match = {
   match_date: string
   match_time: string
   location_type: string
-  clubadress: string
+  clubaddress: string
   composition_validated: boolean
 }
 
@@ -129,10 +129,10 @@ export default function DashboardCapitaine() {
                       >
                         <div>
                           {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
-                          {m.clubadress && (
+                          {m.clubaddress && (
                             <a
                               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                                m.clubadress
+                                m.clubaddress
                               )}`}
                               target="_blank"
                               rel="noreferrer"
