@@ -32,7 +32,7 @@ export default function TeamForm({ teamId, onSaved, onClose }: TeamFormProps) {
 
   useEffect(() => {
     fetchUsers()
-    // tu peux aussi fetch team data ici si nécessaire
+    // tu peux aussi fetch team data ici si nécessaire 
     setLoading(false)
   }, [teamId])
 
