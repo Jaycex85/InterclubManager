@@ -1,20 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 import { MdSportsTennis } from 'react-icons/md'
 import { FaUsers } from 'react-icons/fa'
-import { IoMdAddCircle } from 'react-icons/io'
 
 const MatchForm = dynamic(() => import('./matches/EditMatch'), { ssr: false })
 const CompositionForm = dynamic(() => import('./matches/EditComposition'), { ssr: false })
 
-type Team = {
-  id: string
-  name: string
-}
-
+type Team = { id: string; name: string }
 type Match = {
   id: string
   team_id: string
@@ -27,258 +22,169 @@ type Match = {
 }
 
 export default function DashboardCapitaine() {
+  const [teams, setTeams] = useState<Team[]>([])
+  const [matches, setMatches] = useState<Match[]>([])
+  const [openTeamId, setOpenTeamId] = useState<string | null>(null)
+  const [openModal, setOpenModal] = useState<{ matchId: string; type: 'match' | 'composition' } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [userId, setUserId] = useState<string | null>(null)
 
-  const [teams,setTeams] = useState<Team[]>([])
-  const [matches,setMatches] = useState<Match[]>([])
+  // 🔹 Récupération du userId
+  useEffect(() => {
+    const getUserId = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        window.location.href = '/auth'
+        return
+      }
+      setUserId(session.user.id)
+    }
+    getUserId()
+  }, [])
 
-  const [openTeam,setOpenTeam] = useState<string|null>(null)
+  // 🔹 Fetch équipes où l'utilisateur est capitaine
+  useEffect(() => {
+    if (!userId) return
 
-  const [openMatchModal,setOpenMatchModal] = useState<string|null>(null)
-  const [openCompositionModal,setOpenCompositionModal] = useState<string|null>(null)
-
-  const [createMatchTeam,setCreateMatchTeam] = useState<string|null>(null)
-
-  const [userId,setUserId] = useState<string|null>(null)
-
-  /** USER **/
-  const fetchUser = async () => {
-
-    const { data:{session} } = await supabase.auth.getSession()
-
-    if(!session) return
-
-    const { data } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_id',session.user.id)
-      .single()
-
-    if(data) setUserId(data.id)
-
-  }
-
-  /** TEAMS **/
-  const fetchTeams = async () => {
-
-    if(!userId) return
-
-    const { data,error } = await supabase
-      .from('team_memberships')
-      .select(`
-        team_id,
-        teams(
-          id,
-          name
-        )
-      `)
-      .eq('user_id',userId)
-      .eq('role','captain')
-
-    if(!error && data){
-
-      const formatted = data.map((t:any)=>({
-        id:t.teams.id,
-        name:t.teams.name
-      }))
-
-      setTeams(formatted)
-
+    const fetchTeams = async () => {
+      const { data, error } = await supabase
+        .from('team_memberships')
+        .select(`team_id, teams(name)`)
+        .eq('user_id', userId)
+        .eq('role', 'captain')
+      if (!error && data) {
+        const formatted = data.map((m: any) => ({
+          id: m.team_id,
+          name: m.teams.name
+        }))
+        setTeams(formatted)
+      }
+      setLoading(false)
     }
 
-  }
+    fetchTeams()
+  }, [userId])
 
-  /** MATCHES **/
-  const fetchMatches = async () => {
+  // 🔹 Fetch matchs pour les équipes du capitaine
+  useEffect(() => {
+    if (!teams.length) return
 
-    const { data,error } = await supabase
-      .from('matches')
-      .select('*')
-      .order('match_date',{ascending:true})
-
-    if(!error) setMatches(data || [])
-
-  }
-
-  useEffect(()=>{
-    fetchUser()
-  },[])
-
-  useEffect(()=>{
-    if(userId){
-      fetchTeams()
-      fetchMatches()
+    const fetchMatches = async () => {
+      const teamIds = teams.map(t => t.id)
+      const { data, error } = await supabase
+        .from('matches')
+        .select('*')
+        .in('team_id', teamIds)
+        .order('match_date', { ascending: true })
+      if (!error && data) setMatches(data || [])
     }
-  },[userId])
 
+    fetchMatches()
+  }, [teams])
 
-  /** COLOR LOGIC **/
-
-  const matchColor = (m:Match)=>{
-
-    if(m.composition_validated)
-      return "bg-green-700 hover:bg-green-600"
-
-    const today = new Date().toISOString().split('T')[0]
-
-    if(m.match_date >= today)
-      return "bg-yellow-700 hover:bg-yellow-600"
-
-    return "bg-gray-700 hover:bg-gray-600"
-
-  }
-
-
-  return (
-
-    <div className="space-y-4">
-
-      {teams.map(team=>(
-        <div key={team.id} className="border border-gray-700 rounded overflow-hidden">
-
-          {/* HEADER */}
-          <button
-            className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
-            onClick={()=>setOpenTeam(openTeam===team.id?null:team.id)}
-          >
-
-            <span className="flex items-center text-yellow-400">
-              <MdSportsTennis className="mr-2"/>
-              {team.name}
-            </span>
-
-            <span className={`transform transition ${openTeam===team.id?'rotate-180':''}`}>
-              ▼
-            </span>
-
-          </button>
-
-          {/* CONTENT */}
-          {openTeam===team.id && (
-
-            <div className="p-4 space-y-2">
-
-              {/* CREATE MATCH */}
-              <button
-                className="flex items-center text-green-400 hover:text-green-300"
-                onClick={()=>setCreateMatchTeam(team.id)}
-              >
-                <IoMdAddCircle className="mr-2"/>
-                Créer un match
-              </button>
-
-              {matches
-                .filter(m=>m.team_id===team.id)
-                .map(m=>(
-                  <div
-                    key={m.id}
-                    className={`p-3 rounded flex justify-between items-center ${matchColor(m)}`}
-                  >
-
-                    <button
-                      className="text-left flex-1"
-                      onClick={()=>setOpenMatchModal(m.id)}
-                    >
-
-                      <div className="font-bold">
-                        {m.match_date} {m.match_time}
-                      </div>
-
-                      <div className="text-sm opacity-80">
-                        vs {m.opponent} ({m.location_type})
-                      </div>
-
-                    </button>
-
-                    {/* COMPOSITION */}
-                    <button
-                      className="ml-3 text-white hover:text-yellow-300"
-                      onClick={()=>setOpenCompositionModal(m.id)}
-                    >
-                      <FaUsers/>
-                    </button>
-
-                  </div>
-                ))}
-
-            </div>
-
-          )}
-
-        </div>
-      ))}
-
-
-
-      {/* CREATE MATCH */}
-      {createMatchTeam && (
-
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-
-          <div className="bg-gray-800 p-6 rounded w-full max-w-lg">
-
-            <MatchForm
-              teamId={createMatchTeam}
-              onSaved={()=>{
-                fetchMatches()
-                setCreateMatchTeam(null)
-              }}
-              onClose={()=>setCreateMatchTeam(null)}
-            />
-
-          </div>
-
-        </div>
-
-      )}
-
-
-      {/* EDIT MATCH */}
-      {openMatchModal && (
-
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-
-          <div className="bg-gray-800 p-6 rounded w-full max-w-lg">
-
-            <MatchForm
-              matchId={openMatchModal}
-              onSaved={()=>{
-                fetchMatches()
-                setOpenMatchModal(null)
-              }}
-              onClose={()=>setOpenMatchModal(null)}
-            />
-
-          </div>
-
-        </div>
-
-      )}
-
-
-
-      {/* COMPOSITION */}
-      {openCompositionModal && (
-
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-
-          <div className="bg-gray-800 p-6 rounded w-full max-w-lg">
-
-            <CompositionForm
-              matchId={openCompositionModal}
-              onSaved={()=>{
-                fetchMatches()
-                setOpenCompositionModal(null)
-              }}
-              onClose={()=>setOpenCompositionModal(null)}
-            />
-
-          </div>
-
-        </div>
-
-      )}
-
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+      Chargement des équipes et matchs...
     </div>
   )
 
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">
+        Dashboard Capitaine
+      </h1>
+
+      <div className="space-y-4">
+        {teams.map(team => (
+          <div key={team.id} className="border border-gray-700 rounded overflow-hidden">
+            <button
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
+              onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
+            >
+              <span className="flex items-center"><MdSportsTennis className="mr-2" /> {team.name}</span>
+              <span className={`ml-2 transform transition-transform duration-300 ${openTeamId === team.id ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+
+            {openTeamId === team.id && (
+              <div className="p-4 grid gap-2">
+                {matches.filter(m => m.team_id === team.id).map(m => (
+                  <button
+                    key={m.id}
+                    className={`w-full text-left p-2 rounded flex justify-between items-center
+                      ${m.composition_validated ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-700 hover:bg-gray-600'}`}
+                    onClick={() => setOpenModal({ matchId: m.id, type: 'match' })}
+                  >
+                    <div>
+                      {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
+                      {m.clubadress && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubadress)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-2 text-blue-400 underline"
+                        >
+                          📍
+                        </a>
+                      )}
+                    </div>
+                    {m.composition_validated ? (
+                      <span className="text-yellow-400 font-bold">✔</span>
+                    ) : (
+                      <span className="text-red-400 font-bold">✕</span>
+                    )}
+                  </button>
+                ))}
+
+                <button
+                  className="w-full p-2 bg-yellow-500 hover:bg-yellow-600 rounded font-bold text-black"
+                  onClick={() => setOpenModal({ matchId: '', type: 'match' })}
+                >
+                  + Créer un match
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 🔹 Modal */}
+      {openModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
+            <button
+              className="mb-4 text-red-400 hover:text-red-600 font-bold"
+              onClick={() => setOpenModal(null)}
+            >
+              Fermer ✕
+            </button>
+
+            {openModal.type === 'match' && (
+              <MatchForm
+                matchId={openModal.matchId}
+                onSaved={() => { setOpenModal(null); /* re-fetch matches */ }}
+                onClose={() => setOpenModal(null)}
+              />
+            )}
+
+            {openModal.type === 'composition' && (
+              <CompositionForm
+                matchId={openModal.matchId}
+                onSaved={() => { setOpenModal(null); /* re-fetch availability */ }}
+                onClose={() => setOpenModal(null)}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Animation Tailwind */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+      `}</style>
+    </div>
+  )
 }
