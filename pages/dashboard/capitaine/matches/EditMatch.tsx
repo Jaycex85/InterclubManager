@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 
 type MatchFormProps = {
-  matchId?: string         // si édition
-  teamId?: string          // pré-sélection si création
+  matchId?: string        // si édition
+  teamId?: string         // pré-sélection si création
   onSaved: () => void
   onClose: () => void
 }
@@ -24,21 +24,24 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Fetch teams pour le select
+  // Récupère les équipes pour le select
   const fetchTeams = async () => {
     const { data, error } = await supabase.from('teams').select('*').order('name')
     if (error) console.error(error)
     if (data) setTeams(data)
   }
 
-  // Fetch match si édition
+  // Récupère le match pour édition
   const fetchMatch = async () => {
     if (!matchId || matchId === 'new') {
       setLoading(false)
       return
     }
-
-    const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single()
     if (error) {
       console.error(error)
       setErrorMsg('Impossible de charger le match.')
@@ -48,7 +51,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       setOpponent(data.opponent)
       setMatchDate(data.match_date)
       setMatchTime(data.match_time)
-      setLocationType(data.location_type)
+      setLocationType(data.location_type === 'domicile' ? 'domicile' : 'exterieur')
       setClubaddress(data.clubaddress || '')
       setCompositionValidated(data.composition_validated)
     }
@@ -63,42 +66,46 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMsg('')
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) {
-      setErrorMsg("Utilisateur non connecté")
+
+    // Récupérer session utilisateur pour created_by
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) {
+      setErrorMsg('Erreur lors de la récupération de la session.')
+      return
+    }
+    const user = sessionData?.session?.user
+    if (!user) {
+      setErrorMsg('Utilisateur non connecté.')
       return
     }
 
+    // Prépare payload
     const payload: any = {
       team_id: teamSelected,
       opponent,
       match_date: matchDate,
       match_time: matchTime,
-      location_type: locationType,
+      location_type: locationType,   // toujours 'domicile' ou 'exterieur'
       clubaddress,
       composition_validated: compositionValidated,
       updated_at: new Date().toISOString(),
     }
 
-    // pour insert, on ajoute created_by
-    if (!matchId || matchId === 'new') {
-      payload.created_by = session.user.id
-      const { error } = await supabase.from('matches').insert(payload)
-      if (error) {
-        console.error(error)
-        setErrorMsg(error.message)
-        return
+    // Insert ou update selon le cas
+    try {
+      if (!matchId || matchId === 'new') {
+        payload.created_by = user.id // obligatoire pour NOT NULL
+        const { error } = await supabase.from('matches').insert(payload)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('matches').update(payload).eq('id', matchId)
+        if (error) throw error
       }
-    } else {
-      const { error } = await supabase.from('matches').update(payload).eq('id', matchId)
-      if (error) {
-        console.error(error)
-        setErrorMsg(error.message)
-        return
-      }
+      onSaved()
+    } catch (err: any) {
+      console.error(err)
+      setErrorMsg(err.message || 'Erreur lors de l’enregistrement du match.')
     }
-
-    onSaved()
   }
 
   if (loading) return <div>Chargement...</div>
