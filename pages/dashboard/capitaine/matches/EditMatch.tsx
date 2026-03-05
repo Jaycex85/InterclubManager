@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../../utils/supabaseClient'
 
 type MatchFormProps = {
-  matchId?: string         // si édition
+  matchId?: string         // pour l'édition
   teamId?: string          // pré-sélection si création
   onSaved: () => void
   onClose: () => void
@@ -22,21 +22,50 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const [clubAdress, setClubAdress] = useState('')
   const [compositionValidated, setCompositionValidated] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
 
-  // Fetch teams pour le select
+  // ✅ Récupérer les équipes du capitaine seulement
   const fetchTeams = async () => {
-    const { data, error } = await supabase.from('teams').select('*').order('name')
-    if (!error && data) setTeams(data)
+    const { data, error } = await supabase
+      .from('team_memberships')
+      .select(`team_id, teams(id, name)`)
+      .eq('user_id', supabase.auth.getUser()?.data.user?.id)
+      .eq('role', 'captain')
+
+    if (error) {
+      console.error("Erreur fetchTeams:", error)
+      setErrorMsg(error.message)
+      return
+    }
+
+    if (data) {
+      const formattedTeams = data.map((t: any) => ({
+        id: t.team_id,
+        name: t.teams.name
+      }))
+      setTeams(formattedTeams)
+      if (!teamSelected && formattedTeams.length === 1) {
+        setTeamSelected(formattedTeams[0].id)
+      }
+    }
   }
 
-  // Fetch match si édition
+  // ✅ Fetch match si on édite
   const fetchMatch = async () => {
     if (!matchId) {
       setLoading(false)
       return
     }
-    const { data, error } = await supabase.from('matches').select('*').eq('id', matchId).single()
-    if (!error && data) {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('id', matchId)
+      .single()
+
+    if (error) {
+      console.error("Erreur fetchMatch:", error)
+      setErrorMsg(error.message)
+    } else if (data) {
       setTeamSelected(data.team_id)
       setOpponent(data.opponent)
       setMatchDate(data.match_date)
@@ -45,40 +74,65 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       setClubAdress(data.clubadress || '')
       setCompositionValidated(data.composition_validated)
     }
+
     setLoading(false)
   }
 
   useEffect(() => {
     fetchTeams()
     fetchMatch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg('')
+
+    if (!teamSelected) {
+      setErrorMsg("Veuillez sélectionner une équipe.")
+      return
+    }
+
     const payload = {
       team_id: teamSelected,
       opponent,
       match_date: matchDate,
       match_time: matchTime,
       location_type: locationType,
-      clubadress: clubAdress,
+      clubadress: clubAdress || null,
       composition_validated: compositionValidated,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
 
-    if (matchId) {
-      await supabase.from('matches').update(payload).eq('id', matchId)
-    } else {
-      await supabase.from('matches').insert(payload)
-    }
+    try {
+      let res
+      if (matchId) {
+        res = await supabase.from('matches').update(payload).eq('id', matchId)
+      } else {
+        res = await supabase.from('matches').insert(payload)
+      }
 
-    onSaved()
+      if (res.error) {
+        console.error("Erreur insert/update match:", res.error)
+        setErrorMsg(res.error.message)
+        return
+      }
+
+      onSaved()
+    } catch (err: any) {
+      console.error("Erreur inattendue:", err)
+      setErrorMsg(err.message || 'Erreur inconnue')
+    }
   }
 
   if (loading) return <div>Chargement...</div>
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {errorMsg && (
+        <div className="bg-red-600 text-white p-2 rounded">{errorMsg}</div>
+      )}
+
       <div>
         <label className="block mb-1">Équipe</label>
         <select
@@ -88,9 +142,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
         >
           <option value="">-- Sélectionnez une équipe --</option>
           {teams.map(t => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
+            <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </select>
       </div>
@@ -146,16 +198,6 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
           onChange={e => setClubAdress(e.target.value)}
           className="w-full p-2 rounded bg-gray-700 text-white"
         />
-        {clubAdress && (
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clubAdress)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-yellow-400 hover:underline mt-1 block"
-          >
-            Voir sur Google Maps
-          </a>
-        )}
       </div>
 
       <div className="flex items-center space-x-2">
