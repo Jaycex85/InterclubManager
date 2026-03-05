@@ -20,7 +20,7 @@ export default function TeamForm({ teamId, onSaved, onClose }: TeamFormProps) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Fetch users to populate the captain select
+  /** Fetch users for captain select */
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from('users')
@@ -30,16 +30,33 @@ export default function TeamForm({ teamId, onSaved, onClose }: TeamFormProps) {
     if (!error && data) setUsers(data)
   }
 
+  /** Fetch team data to prefill the form */
+  const fetchTeam = async () => {
+    const { data, error } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', teamId)
+      .single() // fetch one row
+    if (!error && data) {
+      setName(data.name || '')
+      setCategory(data.category || '')
+      setClubId(data.club_id || '')
+      setCaptainId(data.captain_id || null)
+    }
+  }
+
   useEffect(() => {
+    setLoading(true)
     fetchUsers()
-    // tu peux aussi fetch team data ici si nécessaire 
-    setLoading(false)
+    fetchTeam().finally(() => setLoading(false))
   }, [teamId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // save/update team in supabase
-    // ...
+    await supabase
+      .from('teams')
+      .update({ name, category, captain_id: captainId })
+      .eq('id', teamId)
     onSaved()
   }
 
