@@ -4,13 +4,17 @@ import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { createClient } from "@supabase/supabase-js"
 
+// Supabase client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// Dashboards dynamiques
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
+const DashboardCapitaine = dynamic(() => import("./capitaine/DashboardCapitaine"), { ssr: false })
 
+// Tiles temporaires pour joueurs et capitaines (avant de mettre un vrai composant)
 const PlayerDashboardTile = ({ clubName, role }: { clubName: string, role: string }) => (
   <div className="bg-gray-800 p-4 rounded shadow">
     <h2 className="font-bold text-lg">{clubName}</h2>
@@ -46,8 +50,6 @@ export default function DashboardIndex() {
     club_admin: false
   })
   const [loading, setLoading] = useState(true)
-
-  // ✅ Ici, string | null pour accepter les clés dynamiques "player-1", "captain-2", etc.
   const [openPanel, setOpenPanel] = useState<string | null>(null)
   const [memberships, setMemberships] = useState<Membership[]>([])
 
@@ -55,7 +57,6 @@ export default function DashboardIndex() {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) {
-        // redirection si pas connecté
         window.location.href = "/auth"
         return
       }
@@ -142,7 +143,7 @@ export default function DashboardIndex() {
             <div className={`transition-all duration-500 overflow-hidden ${openPanel === `player-${m.club_id}` ? "max-h-[5000px]" : "max-h-0"}`}>
               {openPanel === `player-${m.club_id}` && (
                 <div className="p-4">
-                  {/* Ici tu pourras mettre le composant PlayerForm plus tard */}
+                  {/* Placeholder joueur */}
                   <PlayerDashboardTile clubName={m.club_name} role={m.role} />
                 </div>
               )}
@@ -164,8 +165,8 @@ export default function DashboardIndex() {
             <div className={`transition-all duration-500 overflow-hidden ${openPanel === `captain-${m.club_id}` ? "max-h-[5000px]" : "max-h-0"}`}>
               {openPanel === `captain-${m.club_id}` && (
                 <div className="p-4">
-                  {/* Ici tu pourras mettre le composant CaptainForm plus tard */}
-                  <CaptainDashboardTile clubName={m.club_name} role={m.role} />
+                  {/* Dashboard capitaine complet */}
+                  <DashboardCapitaine />
                 </div>
               )}
             </div>
