@@ -19,7 +19,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const [matchDate, setMatchDate] = useState('')
   const [matchTime, setMatchTime] = useState('')
   const [locationType, setLocationType] = useState<'domicile' | 'exterieur'>('domicile')
-  const [clubAddress, setClubAddress] = useState('')
+  const [clubaddress, setclubaddress] = useState('')
   const [compositionValidated, setCompositionValidated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -75,7 +75,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       setMatchDate(data.match_date)
       setMatchTime(data.match_time)
       setLocationType(data.location_type)
-      setClubAddress(data.clubAddress || '')
+      setclubaddress(data.clubaddress || '')
       setCompositionValidated(data.composition_validated)
     }
   }
@@ -99,7 +99,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       match_date: matchDate,
       match_time: matchTime,
       location_type: locationType,
-      clubAddress: clubAddress,
+      clubaddress: clubaddress,
       composition_validated: compositionValidated,
       updated_at: new Date().toISOString(),
     }
@@ -191,8 +191,8 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
         <label className="block mb-1">Addresse du club (optionnel)</label>
         <input
           type="text"
-          value={clubAddress}
-          onChange={e => setClubAddress(e.target.value)}
+          value={clubaddress}
+          onChange={e => setclubaddress(e.target.value)}
           className="w-full p-2 rounded bg-gray-700 text-white"
         />
       </div>
