@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
+import { FaUsers, FaFutbol, FaUser } from 'react-icons/fa' // Font Awesome icons
 
 // Formulaires dynamiques
 const ClubForm = dynamic(() => import('./clubs/EditClub'), { ssr: false })
@@ -20,7 +21,6 @@ export default function AdminDashboard() {
   const [teams, setTeams] = useState<Team[]>([])
   const [users, setUsers] = useState<User[]>([])
 
-  const [openPanel, setOpenPanel] = useState<PanelKey | null>(null)
   const [openModal, setOpenModal] = useState<{ type: PanelKey; id: string } | null>(null)
 
   /** FETCH FUNCTIONS */
@@ -32,13 +32,7 @@ export default function AdminDashboard() {
   const fetchTeams = async () => {
     const { data, error } = await supabase
       .from('teams')
-      .select(`
-        id,
-        name,
-        club_id,
-        category,
-        club:club_id(name)
-      `)
+      .select(`id, name, club_id, category, club:club_id(name)`)
       .order('name')
     if (!error)
       setTeams(
@@ -53,7 +47,7 @@ export default function AdminDashboard() {
   }
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('users').select('*').order('email')
+    const { data, error } = await supabase.from('users').select('*').order('last_name, first_name')
     if (!error) setUsers(data || [])
   }
 
@@ -63,107 +57,138 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
-  /** PANELS DATA */
-  const panels: { key: PanelKey; label: string; items: { id: string; title: string }[] }[] = [
+  const panels: { key: PanelKey; label: string; icon: JSX.Element; items: { id: string; title: string }[] }[] = [
     {
       key: 'clubs',
       label: 'Clubs',
+      icon: <FaFutbol className="w-6 h-6 mr-2" />,
       items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })),
     },
     {
       key: 'teams',
       label: 'Teams',
+      icon: <FaUsers className="w-6 h-6 mr-2" />,
       items: teams.map(t => ({ id: t.id, title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}` })),
     },
     {
       key: 'users',
       label: 'Users',
+      icon: <FaUser className="w-6 h-6 mr-2" />,
       items: users.map(u => {
         const fullName = [u.last_name, u.first_name].filter(Boolean).join(' ').trim()
-        return {
-          id: u.id,
-          title: fullName ? `${fullName} - ${u.email}` : u.email,
-        }
+        return { id: u.id, title: fullName ? `${fullName} - ${u.email}` : u.email }
       }),
     },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">Admin Dashboard</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Admin Dashboard</h1>
 
-      <div className="space-y-4 md:space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {panels.map(panel => (
           <div
             key={panel.key}
-            className="border border-gray-700 rounded overflow-hidden shadow-lg hover:shadow-xl transition-shadow"
+            className="bg-gray-800 p-6 rounded-lg shadow-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700 transition-all duration-300"
+            onClick={() => setOpenModal({ type: panel.key, id: '' })}
           >
-            {/* Panel header */}
-            <button
-              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400"
-              onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
-            >
-              {panel.label}
-              <span
-                className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}
-              >
-                ▼
-              </span>
-            </button>
-
-            {/* Panel items */}
-            {openPanel === panel.key && (
-              <div className="p-4 grid gap-2 max-h-96 overflow-y-auto">
-                {panel.items.map(item => (
-                  <button
-                    key={item.id}
-                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                    onClick={() => setOpenModal({ type: panel.key, id: item.id })}
-                  >
-                    {item.title}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="text-yellow-400">{panel.icon}</div>
+            <h2 className="mt-4 text-xl font-bold">{panel.label}</h2>
+            <p className="mt-2 text-gray-300">{panel.items.length} éléments</p>
           </div>
         ))}
       </div>
 
       {/* Modal */}
       {openModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto relative">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-2xl transform transition-transform duration-300 scale-95 animate-fade-in">
             <button
-              className="absolute top-4 right-4 text-red-400 hover:text-red-600 font-bold text-xl"
+              className="mb-4 text-red-400 hover:text-red-600 font-bold"
               onClick={() => setOpenModal(null)}
             >
-              ✕
+              Fermer ✕
             </button>
 
             {openModal.type === 'clubs' && (
-              <ClubForm
-                clubId={openModal.id}
-                onSaved={() => { fetchClubs(); setOpenModal(null) }}
-                onClose={() => setOpenModal(null)}
-              />
+              <div className="space-y-2">
+                {clubs.map(c => (
+                  <button
+                    key={c.id}
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                    onClick={() => setOpenModal({ type: 'clubs', id: c.id })}
+                  >
+                    {c.city ? `${c.name} - ${c.city}` : c.name}
+                  </button>
+                ))}
+                {openModal.id && (
+                  <ClubForm
+                    clubId={openModal.id}
+                    onSaved={() => { fetchClubs(); setOpenModal(null) }}
+                    onClose={() => setOpenModal(null)}
+                  />
+                )}
+              </div>
             )}
+
             {openModal.type === 'teams' && (
-              <TeamForm
-                teamId={openModal.id}
-                onSaved={() => { fetchTeams(); setOpenModal(null) }}
-                onClose={() => setOpenModal(null)}
-              />
+              <div className="space-y-2">
+                {teams.map(t => (
+                  <button
+                    key={t.id}
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                    onClick={() => setOpenModal({ type: 'teams', id: t.id })}
+                  >
+                    {t.name} - {t.club_name}{t.category ? ` - ${t.category}` : ''}
+                  </button>
+                ))}
+                {openModal.id && (
+                  <TeamForm
+                    teamId={openModal.id}
+                    onSaved={() => { fetchTeams(); setOpenModal(null) }}
+                    onClose={() => setOpenModal(null)}
+                  />
+                )}
+              </div>
             )}
+
             {openModal.type === 'users' && (
-              <EditUser
-                userId={openModal.id}
-                onSaved={() => { fetchUsers(); setOpenModal(null) }}
-                onClose={() => setOpenModal(null)}
-              />
+              <div className="space-y-2">
+                {users.map(u => {
+                  const fullName = [u.last_name, u.first_name].filter(Boolean).join(' ').trim()
+                  const label = fullName ? `${fullName} - ${u.email}` : u.email
+                  return (
+                    <button
+                      key={u.id}
+                      className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                      onClick={() => setOpenModal({ type: 'users', id: u.id })}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+                {openModal.id && (
+                  <EditUser
+                    userId={openModal.id}
+                    onSaved={() => { fetchUsers(); setOpenModal(null) }}
+                    onClose={() => setOpenModal(null)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .animate-fade-in {
+          animation: fadeIn 0.2s ease-out forwards;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>
   )
 }
