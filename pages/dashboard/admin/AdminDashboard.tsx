@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
-import { FaUsers, FaTennisBall, FaBuilding } from 'react-icons/fa6'
+
+// Icônes
+import { FaUsers, FaBuilding } from 'react-icons/fa'
+import { MdSportsTennis } from 'react-icons/md'
 
 // Formulaires dynamiques
 const ClubForm = dynamic(() => import('./clubs/EditClub'), { ssr: false })
@@ -33,13 +36,7 @@ export default function AdminDashboard() {
   const fetchTeams = async () => {
     const { data, error } = await supabase
       .from('teams')
-      .select(`
-        id,
-        name,
-        club_id,
-        category,
-        club:club_id(name)
-      `)
+      .select(`id, name, club_id, category, club:club_id(name)`)
       .order('name')
     if (!error)
       setTeams(
@@ -54,7 +51,7 @@ export default function AdminDashboard() {
   }
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase.from('users').select('*').order('last_name')
+    const { data, error } = await supabase.from('users').select('*').order('email')
     if (!error) setUsers(data || [])
   }
 
@@ -64,18 +61,22 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
+  /** PANEL DEFINITIONS */
   const panels: { key: PanelKey; label: string; icon: JSX.Element; items: { id: string; title: string }[] }[] = [
     {
       key: 'clubs',
       label: 'Clubs',
       icon: <FaBuilding className="inline mr-2" />,
-      items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name }))
+      items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })),
     },
     {
       key: 'teams',
       label: 'Teams',
-      icon: <FaTennisBall className="inline mr-2" />,
-      items: teams.map(t => ({ id: t.id, title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}` }))
+      icon: <MdSportsTennis className="inline mr-2" />,
+      items: teams.map(t => ({
+        id: t.id,
+        title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}`,
+      })),
     },
     {
       key: 'users',
@@ -83,32 +84,36 @@ export default function AdminDashboard() {
       icon: <FaUsers className="inline mr-2" />,
       items: users.map(u => ({
         id: u.id,
-        title: u.first_name ? `${u.first_name} ${u.last_name || ''} - ${u.email}` : u.email
-      }))
-    }
+        title: u.first_name ? `${u.first_name} ${u.last_name || ''} - ${u.email}` : u.email,
+      })),
+    },
   ]
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">Admin Dashboard</h1>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="space-y-4">
         {panels.map(panel => (
-          <div key={panel.key} className="bg-gray-800 rounded shadow hover:shadow-lg transition">
+          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
+            {/* Panel header */}
             <button
-              className="w-full p-6 font-bold text-left flex items-center justify-between hover:bg-gray-700 rounded-t"
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex items-center justify-between"
               onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
-              <span className="flex items-center text-xl">{panel.icon}{panel.label}</span>
-              <span className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}>▼</span>
+              <span className="flex items-center">{panel.icon} {panel.label}</span>
+              <span className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
             </button>
 
+            {/* Panel items */}
             {openPanel === panel.key && (
-              <div className="p-4 space-y-2">
+              <div className="p-4 grid gap-2">
                 {panel.items.map(item => (
                   <button
                     key={item.id}
-                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded transition"
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
                     onClick={() => setOpenModal({ type: panel.key, id: item.id })}
                   >
                     {item.title}
@@ -123,7 +128,7 @@ export default function AdminDashboard() {
       {/* Modal */}
       {openModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg transform transition-all scale-90 opacity-0 animate-fade-in">
+          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
             <button
               className="mb-4 text-red-400 hover:text-red-600 font-bold"
               onClick={() => setOpenModal(null)}
@@ -155,6 +160,17 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Animation keyframes Tailwind */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }
