@@ -63,10 +63,29 @@ export default function AdminDashboard() {
     fetchUsers()
   }, [])
 
+  /** PANELS DATA */
   const panels: { key: PanelKey; label: string; items: { id: string; title: string }[] }[] = [
-    { key: 'clubs', label: 'Clubs', items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })) },
-    { key: 'teams', label: 'Teams', items: teams.map(t => ({ id: t.id, title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}` })) },
-    { key: 'users', label: 'Users', items: users.map(u => ({ id: u.id, title: u.first_name ? `${u.email} - ${u.first_name} ${u.last_name || ''}` : u.email })) },
+    {
+      key: 'clubs',
+      label: 'Clubs',
+      items: clubs.map(c => ({ id: c.id, title: c.city ? `${c.name} - ${c.city}` : c.name })),
+    },
+    {
+      key: 'teams',
+      label: 'Teams',
+      items: teams.map(t => ({ id: t.id, title: `${t.name} - ${t.club_name}${t.category ? ` - ${t.category}` : ''}` })),
+    },
+    {
+      key: 'users',
+      label: 'Users',
+      items: users.map(u => {
+        const fullName = [u.last_name, u.first_name].filter(Boolean).join(' ').trim()
+        return {
+          id: u.id,
+          title: fullName ? `${fullName} - ${u.email}` : u.email,
+        }
+      }),
+    },
   ]
 
   return (
@@ -75,14 +94,16 @@ export default function AdminDashboard() {
 
       <div className="space-y-4">
         {panels.map(panel => (
-          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden">
+          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden shadow">
             {/* Panel header */}
             <button
-              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center transition-colors"
               onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
               {panel.label}
-              <span className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}>
+              <span
+                className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}
+              >
                 ▼
               </span>
             </button>
@@ -93,7 +114,7 @@ export default function AdminDashboard() {
                 {panel.items.map(item => (
                   <button
                     key={item.id}
-                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded"
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
                     onClick={() => setOpenModal({ type: panel.key, id: item.id })}
                   >
                     {item.title}
@@ -108,12 +129,12 @@ export default function AdminDashboard() {
       {/* Modal */}
       {openModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg">
+          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg relative">
             <button
-              className="mb-4 text-red-400 hover:text-red-600 font-bold"
+              className="absolute top-4 right-4 text-red-400 hover:text-red-600 font-bold"
               onClick={() => setOpenModal(null)}
             >
-              Fermer ✕
+              ✕
             </button>
 
             {openModal.type === 'clubs' && (
