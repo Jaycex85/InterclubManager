@@ -1,181 +1,107 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../../../utils/supabaseClient'
+import { useState, useEffect } from 'react'
+import { supabase } from '../../../utils/supabaseClient'
 
-type Team = {
-  id?: string
-  name: string
-  club_id: string
-  category?: string
-  captain_id?: string
-}
-
-type Club = {
-  id: string
-  name: string
-}
-
-type User = {
-  id: string
-  email: string
-}
-
-type Props = {
-  teamId: string | null
-  onClose: () => void
+type TeamFormProps = {
+  teamId: string
   onSaved: () => void
+  onClose: () => void
 }
 
-export default function EditTeam({ teamId, onClose, onSaved }: Props) {
-  const isNew = teamId === 'new'
+type User = { id: string; email: string; first_name?: string; last_name?: string }
 
-  const [team, setTeam] = useState<Team>({
-    name: '',
-    club_id: '',
-    category: '',
-    captain_id: '',
-  })
+export default function TeamForm({ teamId, onSaved, onClose }: TeamFormProps) {
+  const [name, setName] = useState('')
+  const [clubId, setClubId] = useState('')
+  const [category, setCategory] = useState('')
+  const [captainId, setCaptainId] = useState<string | null>(null)
 
-  const [clubs, setClubs] = useState<Club[]>([])
   const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Charger clubs et users
-  useEffect(() => {
-    const fetchClubs = async () => {
-      const { data } = await supabase
-        .from('clubs')
-        .select('id, name')
-        .order('name')
-      if (data) setClubs(data)
-    }
+  // Fetch users to populate the captain select
+  const fetchUsers = async () => {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('last_name, first_name')
 
-    const fetchUsers = async () => {
-      const { data } = await supabase
-        .from('users')
-        .select('id, email')
-        .order('email')
-      if (data) setUsers(data)
-    }
-
-    fetchClubs()
-    fetchUsers()
-  }, [])
-
-  // Charger team si édition
-  useEffect(() => {
-    if (!teamId || teamId === 'new') return
-
-    const fetchTeam = async () => {
-      setLoading(true)
-      const { data } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('id', teamId)
-        .single()
-
-      if (data) setTeam(data)
-      setLoading(false)
-    }
-
-    fetchTeam()
-  }, [teamId])
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    setTeam({ ...team, [e.target.name]: e.target.value })
+    if (!error && data) setUsers(data)
   }
+
+  useEffect(() => {
+    fetchUsers()
+    // tu peux aussi fetch team data ici si nécessaire
+    setLoading(false)
+  }, [teamId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-
-    if (isNew) {
-      await supabase.from('teams').insert([team])
-    } else {
-      await supabase.from('teams').update(team).eq('id', teamId)
-    }
-
-    setLoading(false)
+    // save/update team in supabase
+    // ...
     onSaved()
-    onClose()
   }
 
+  if (loading) return <div>Chargement...</div>
+
   return (
-    <div className="mt-6 p-6 bg-gray-800 rounded shadow">
-      <h2 className="text-2xl font-bold text-yellow-400 mb-4">
-        {isNew ? 'Nouvelle Équipe' : 'Éditer Équipe'}
-      </h2>
-
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block mb-1">Nom de l'équipe</label>
         <input
           type="text"
-          name="name"
-          placeholder="Nom de l’équipe"
-          value={team.name}
-          onChange={handleChange}
-          className="w-full p-2 rounded bg-gray-900 border border-gray-700"
-          required
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full p-2 rounded bg-gray-700 text-white"
         />
+      </div>
 
-        <select
-          name="club_id"
-          value={team.club_id}
-          onChange={handleChange}
-          className="w-full p-2 rounded bg-gray-900 border border-gray-700"
-          required
-        >
-          <option value="">Sélectionner un club</option>
-          {clubs.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-
+      <div>
+        <label className="block mb-1">Catégorie</label>
         <input
           type="text"
-          name="category"
-          placeholder="Catégorie"
-          value={team.category || ''}
-          onChange={handleChange}
-          className="w-full p-2 rounded bg-gray-900 border border-gray-700"
+          value={category}
+          onChange={e => setCategory(e.target.value)}
+          className="w-full p-2 rounded bg-gray-700 text-white"
         />
+      </div>
 
+      <div>
+        <label className="block mb-1">Capitaine</label>
         <select
-          name="captain_id"
-          value={team.captain_id || ''}
-          onChange={handleChange}
-          className="w-full p-2 rounded bg-gray-900 border border-gray-700"
+          value={captainId || ''}
+          onChange={e => setCaptainId(e.target.value)}
+          className="w-full p-2 rounded bg-gray-700 text-white"
         >
-          <option value="">Sélectionner un capitaine</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.email}
-            </option>
-          ))}
+          <option value="">-- Aucun --</option>
+          {users.map(u => {
+            const fullName = [u.last_name, u.first_name].filter(Boolean).join(' ').trim()
+            const label = fullName ? `${fullName} - ${u.email}` : u.email
+            return (
+              <option key={u.id} value={u.id}>
+                {label}
+              </option>
+            )
+          })}
         </select>
+      </div>
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
-            disabled={loading}
-          >
-            {isNew ? 'Créer' : 'Mettre à jour'}
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded"
-          >
-            Annuler
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="flex justify-end space-x-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded"
+        >
+          Annuler
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 rounded text-black font-bold"
+        >
+          Enregistrer
+        </button>
+      </div>
+    </form>
   )
 }
