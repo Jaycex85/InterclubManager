@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useLayoutEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/router"
 import dynamic from "next/dynamic"
 import { createClient } from "@supabase/supabase-js"
@@ -39,35 +39,6 @@ type Membership = {
   role: "player" | "captain" | "club_admin"
 }
 
-// ---------------------------
-// Composant Accordion dynamique
-// ---------------------------
-function ExpandablePanel({ isOpen, children }: { isOpen: boolean, children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState('0px')
-
-  useLayoutEffect(() => {
-    if (!ref.current) return
-    const el = ref.current
-    const id = requestAnimationFrame(() => {
-      setHeight(isOpen ? `${el.scrollHeight}px` : '0px')
-    })
-    return () => cancelAnimationFrame(id)
-  }, [isOpen, children])
-
-  return (
-    <div
-      ref={ref}
-      style={{ maxHeight: height, overflow: 'hidden', transition: 'max-height 0.4s ease' }}
-    >
-      {children}
-    </div>
-  )
-}
-
-// ---------------------------
-// Dashboard principal
-// ---------------------------
 export default function DashboardIndex() {
   const router = useRouter()
   const [roles, setRoles] = useState<Roles>({ admin: false, player: false, captain: false, club_admin: false })
@@ -160,10 +131,9 @@ export default function DashboardIndex() {
             >
               {panel.label}
             </button>
-
-            <ExpandablePanel isOpen={openPanel === panel.key}>
-              {panel.component}
-            </ExpandablePanel>
+            <div className={`transition-all duration-500 overflow-hidden ${openPanel === panel.key ? 'max-h-[5000px]' : 'max-h-0'}`}>
+              {openPanel === panel.key && panel.component}
+            </div>
           </div>
         ))}
       </div>
