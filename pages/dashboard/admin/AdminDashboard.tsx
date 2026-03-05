@@ -89,15 +89,18 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Admin Dashboard</h1>
+    <div className="min-h-screen bg-gray-900 text-white p-4 md:p-6">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">Admin Dashboard</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-4 md:space-y-6">
         {panels.map(panel => (
-          <div key={panel.key} className="border border-gray-700 rounded overflow-hidden shadow">
+          <div
+            key={panel.key}
+            className="border border-gray-700 rounded overflow-hidden shadow-lg hover:shadow-xl transition-shadow"
+          >
             {/* Panel header */}
             <button
-              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center transition-colors"
+              className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400"
               onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
               {panel.label}
@@ -110,11 +113,11 @@ export default function AdminDashboard() {
 
             {/* Panel items */}
             {openPanel === panel.key && (
-              <div className="p-4 grid gap-2">
+              <div className="p-4 grid gap-2 max-h-96 overflow-y-auto">
                 {panel.items.map(item => (
                   <button
                     key={item.id}
-                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
+                    className="w-full text-left p-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-400"
                     onClick={() => setOpenModal({ type: panel.key, id: item.id })}
                   >
                     {item.title}
@@ -128,10 +131,10 @@ export default function AdminDashboard() {
 
       {/* Modal */}
       {openModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg relative">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto relative">
             <button
-              className="absolute top-4 right-4 text-red-400 hover:text-red-600 font-bold"
+              className="absolute top-4 right-4 text-red-400 hover:text-red-600 font-bold text-xl"
               onClick={() => setOpenModal(null)}
             >
               ✕
