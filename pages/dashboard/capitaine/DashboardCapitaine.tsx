@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 import { MdSportsTennis } from 'react-icons/md'
-import { FaUsers } from 'react-icons/fa'
 
 const MatchForm = dynamic(() => import('./matches/EditMatch'), { ssr: false })
 const CompositionForm = dynamic(() => import('./matches/EditComposition'), { ssr: false })
@@ -29,48 +28,48 @@ export default function DashboardCapitaine() {
   const [openCompositionId, setOpenCompositionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.user) return
+  // ✅ Fetch teams & matches
+  const fetchData = async () => {
+    setLoading(true)
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session?.user) return
 
-      const userId = session.user.id
+    const userId = session.user.id
 
-      // fetch captain teams
-      const { data: teamData, error: teamError } = await supabase
-        .from('team_memberships')
-        .select(`team_id, role, teams(id, name)`)
-        .eq('user_id', userId)
-        .eq('role', 'captain')
+    // Fetch captain teams
+    const { data: teamData, error: teamError } = await supabase
+      .from('team_memberships')
+      .select(`team_id, role, teams(id, name)`)
+      .eq('user_id', userId)
+      .eq('role', 'captain')
 
-      if (teamError) console.error(teamError)
+    if (teamError) console.error(teamError)
 
-      if (teamData) {
-        const formattedTeams = teamData.map((m: any) => ({
-          id: m.team_id,
-          name: m.teams.name,
-        }))
-        setTeams(formattedTeams)
-      }
+    if (teamData) {
+      const formattedTeams = teamData.map((m: any) => ({
+        id: m.team_id,
+        name: m.teams.name,
+      }))
+      setTeams(formattedTeams)
 
-      // fetch matches for these teams
-      if (teamData?.length) {
-        const teamIds = teamData.map((t: any) => t.team_id)
-        const { data: matchData, error: matchError } = await supabase
-          .from('matches')
-          .select('*')
-          .in('team_id', teamIds)
-          .order('match_date', { ascending: true })
+      // Fetch matches for these teams
+      const teamIds = formattedTeams.map(t => t.id)
+      const { data: matchData, error: matchError } = await supabase
+        .from('matches')
+        .select('*')
+        .in('team_id', teamIds)
+        .order('match_date', { ascending: true })
 
-        if (matchError) console.error(matchError)
-        if (matchData) setMatches(matchData)
-      }
-
-      setLoading(false)
+      if (matchError) console.error(matchError)
+      if (matchData) setMatches(matchData)
     }
 
+    setLoading(false)
+  }
+
+  useEffect(() => {
     fetchData()
   }, [])
 
@@ -88,6 +87,7 @@ export default function DashboardCapitaine() {
         <div className="space-y-4">
           {teams.map(team => (
             <div key={team.id} className="border border-gray-700 rounded overflow-hidden">
+              {/* ---------- Team Header ---------- */}
               <button
                 className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
                 onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
@@ -97,11 +97,21 @@ export default function DashboardCapitaine() {
               </button>
 
               {openTeamId === team.id && (
-                <div className="p-4 grid gap-2">
+                <div className="p-4 space-y-2">
+
+                  {/* ---------- Créer un match ---------- */}
+                  <button
+                    className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded"
+                    onClick={() => setOpenMatchId('new')}
+                  >
+                    ➕ Créer un match
+                  </button>
+
+                  {/* ---------- Liste des matchs ---------- */}
                   {matches
                     .filter(m => m.team_id === team.id)
                     .map(m => (
-                      <div key={m.id} className="flex justify-between items-center bg-gray-700 hover:bg-gray-600 rounded p-2">
+                      <div key={m.id} className={`flex justify-between items-center rounded p-2 ${m.composition_validated ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-700 hover:bg-gray-600'}`}>
                         <div>
                           {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
                           {m.clubadress && (
@@ -138,7 +148,7 @@ export default function DashboardCapitaine() {
         </div>
       )}
 
-      {/* Modal Match */}
+      {/* ---------- Modals ---------- */}
       {openMatchId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
@@ -150,14 +160,13 @@ export default function DashboardCapitaine() {
             </button>
             <MatchForm
               matchId={openMatchId}
-              onSaved={() => { setOpenMatchId(null); setLoading(true); setTimeout(() => setLoading(false), 100) }}
+              onSaved={() => { setOpenMatchId(null); fetchData() }}
               onClose={() => setOpenMatchId(null)}
             />
           </div>
         </div>
       )}
 
-      {/* Modal Composition */}
       {openCompositionId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
@@ -169,7 +178,7 @@ export default function DashboardCapitaine() {
             </button>
             <CompositionForm
               matchId={openCompositionId}
-              onSaved={() => { setOpenCompositionId(null); setLoading(true); setTimeout(() => setLoading(false), 100) }}
+              onSaved={() => { setOpenCompositionId(null); fetchData() }}
               onClose={() => setOpenCompositionId(null)}
             />
           </div>
