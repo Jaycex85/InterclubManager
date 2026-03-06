@@ -18,6 +18,11 @@ type Availability = {
   status: 'available' | 'unavailable'
   selection_status: 'selected' | 'not_selected' | 'absent' | null
   user_id: string
+}
+
+type ModalPlayer = {
+  user_id: string
+  selection_status: 'selected' | 'not_selected' | 'absent' | null
   first_name?: string
   last_name?: string
   email?: string
@@ -26,7 +31,7 @@ type Availability = {
 type ModalData = {
   visible: boolean
   matchName: string
-  composition: Availability[]
+  composition: ModalPlayer[]
 }
 
 export default function DashboardJoueur() {
@@ -39,13 +44,21 @@ export default function DashboardJoueur() {
     composition: []
   })
 
+  const [userId, setUserId] = useState<string>('')
+
   useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setUserId(user?.id || '')
+    }
+    fetchUser()
     fetchData()
   }, [])
 
   const fetchData = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
+
     const userId = session.user.id
 
     const { data: memberships } = await supabase
@@ -69,30 +82,17 @@ export default function DashboardJoueur() {
 
     const { data: availData } = await supabase
       .from('availability')
-      .select('*, users(first_name, last_name, email)')
+      .select('match_id, user_id, status, selection_status')
       .in('match_id', matchesData?.map(m => m.id) || [])
 
-    if (availData) {
-      const formatted = availData.map((a: any) => ({
-        match_id: a.match_id,
-        user_id: a.user_id,
-        status: a.status,
-        selection_status: a.selection_status,
-        first_name: a.users.first_name,
-        last_name: a.users.last_name,
-        email: a.users.email
-      }))
-      setAvailability(formatted)
-    }
+    if (availData) setAvailability(availData)
 
     setLoading(false)
   }
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
+    if (!userId) return
 
-    const userId = session.user.id
     const match = matches.find(m => m.id === matchId)
     if (!match || match.composition_validated) return
 
@@ -118,29 +118,7 @@ export default function DashboardJoueur() {
   const getSelectionStatus = (matchId: string, userId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
-  const showComposition = async (matchId: string, matchName: string) => {
-    // fetch selected players for this match
-    const { data } = await supabase
-      .from('availability')
-      .select('user_id, selection_status, users(first_name, last_name, email)')
-      .eq('match_id', matchId)
-      .eq('selection_status', 'selected')
-
-    if (data) {
-      const comp = data.map((a: any) => ({
-        user_id: a.user_id,
-        selection_status: a.selection_status,
-        first_name: a.users.first_name,
-        last_name: a.users.last_name,
-        email: a.users.email
-      }))
-      setModal({ visible: true, matchName, composition: comp })
-    }
-  }
-
   if (loading) return <div className="text-white p-6">Chargement...</div>
-
-  const userId = supabase.auth.getUser()?.data.user?.id || ''
 
   const matchesEnAttente = matches.filter(m => !m.composition_validated)
   const mesMatchs = matches.filter(m =>
@@ -149,6 +127,25 @@ export default function DashboardJoueur() {
   const autresMatchs = matches.filter(m =>
     m.composition_validated && getSelectionStatus(m.id, userId) !== 'selected'
   )
+
+  const showComposition = async (matchId: string, matchName: string) => {
+    const { data } = await supabase
+      .from('availability')
+      .select('user_id, selection_status, users(first_name, last_name, email)')
+      .eq('match_id', matchId)
+      .eq('selection_status', 'selected')
+
+    if (data) {
+      const comp: ModalPlayer[] = data.map((a: any) => ({
+        user_id: a.user_id,
+        selection_status: a.selection_status,
+        first_name: a.users?.first_name,
+        last_name: a.users?.last_name,
+        email: a.users?.email
+      }))
+      setModal({ visible: true, matchName, composition: comp })
+    }
+  }
 
   const renderMatch = (m: Match, editable: boolean) => {
     const status = getStatus(m.id, userId)
@@ -168,7 +165,7 @@ export default function DashboardJoueur() {
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
               target="_blank"
               rel="noreferrer"
-              className="ml-4 px-1 py-1 text-white hover:text-yellow-400 text-xl"
+              className="ml-4 px-2 py-1 text-white rounded hover:text-yellow-400"
             >
               📍
             </a>
@@ -192,7 +189,9 @@ export default function DashboardJoueur() {
           </div>
         )}
 
-        {status && <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>}
+        {status && (
+          <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>
+        )}
 
         {m.composition_validated && (
           <div className="mt-2 flex items-center gap-2">
@@ -245,7 +244,7 @@ export default function DashboardJoueur() {
             <div className="space-y-2">
               {modal.composition.map(p => {
                 const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
-                const label = fullName ? `${fullName} (${p.email || ''})` : 'Nom inconnu'
+                const label = fullName ? `${fullName} (${p.email})` : p.email || 'Nom inconnu'
                 return (
                   <div key={p.user_id} className="flex justify-between p-2 bg-gray-700 rounded">
                     <span>{label}</span>
