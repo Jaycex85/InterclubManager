@@ -18,7 +18,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
   const [opponent, setOpponent] = useState('')
   const [matchDate, setMatchDate] = useState('')
   const [matchTime, setMatchTime] = useState('')
-  const [locationType, setLocationType] = useState<'domicile' | 'exterieur'>('domicile')
+  const [locationType, setLocationType] = useState<'Domicile' | 'Extérieur'>('Domicile')
   const [clubaddress, setClubaddress] = useState('')
   const [compositionValidated, setCompositionValidated] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -51,7 +51,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       setOpponent(data.opponent)
       setMatchDate(data.match_date)
       setMatchTime(data.match_time)
-      setLocationType(data.location_type === 'domicile' ? 'domicile' : 'exterieur')
+      setLocationType(data.location_type === 'Domicile' ? 'Domicile' : 'Extérieur')
       setClubaddress(data.clubaddress || '')
       setCompositionValidated(data.composition_validated)
     }
@@ -85,7 +85,7 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
       opponent,
       match_date: matchDate,
       match_time: matchTime,
-      location_type: locationType,   // toujours 'domicile' ou 'exterieur'
+      location_type: locationType,   // toujours 'Domicile' ou 'Extérieur'
       clubaddress,
       composition_validated: compositionValidated,
       updated_at: new Date().toISOString(),
@@ -167,12 +167,12 @@ export default function EditMatch({ matchId, teamId, onSaved, onClose }: MatchFo
         <label className="block mb-1">Lieu</label>
         <select
           value={locationType}
-          onChange={e => setLocationType(e.target.value as 'domicile' | 'exterieur')}
+          onChange={e => setLocationType(e.target.value as 'Domicile' | 'Extérieur')}
           className="w-full p-2 rounded bg-gray-700 text-white"
           required
         >
-          <option value="domicile">Domicile</option>
-          <option value="exterieur">Extérieur</option>
+          <option value="Domicile">Domicile</option>
+          <option value="Extérieur">Extérieur</option>
         </select>
       </div>
 
