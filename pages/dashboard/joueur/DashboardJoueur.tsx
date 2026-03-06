@@ -38,6 +38,7 @@ export default function DashboardJoueur() {
     matchName: '',
     composition: []
   })
+  const [userId, setUserId] = useState<string>('')
 
   useEffect(() => {
     fetchData()
@@ -47,13 +48,12 @@ export default function DashboardJoueur() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
 
-    const userId = session.user.id
+    setUserId(session.user.id)
 
-    // 1️⃣ récupérer les équipes du joueur
     const { data: memberships } = await supabase
       .from('team_memberships')
       .select('team_id')
-      .eq('user_id', userId)
+      .eq('user_id', session.user.id)
 
     const teamIds = memberships?.map(m => m.team_id) || []
     if (!teamIds.length) {
@@ -61,7 +61,6 @@ export default function DashboardJoueur() {
       return
     }
 
-    // 2️⃣ récupérer les matchs de ces équipes
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
@@ -70,39 +69,18 @@ export default function DashboardJoueur() {
 
     if (matchesData) setMatches(matchesData)
 
-    // 3️⃣ récupérer la disponibilité du joueur avec les infos users
     const { data: availData } = await supabase
       .from('availability')
-      .select(`
-        match_id,
-        user_id,
-        status,
-        selection_status,
-        users(first_name, last_name, email)
-      `)
+      .select('*')
       .in('match_id', matchesData?.map(m => m.id) || [])
 
-    if (availData) {
-      const formatted = availData.map((a: any) => ({
-        match_id: a.match_id,
-        user_id: a.user_id,
-        status: a.status,
-        selection_status: a.selection_status,
-        first_name: a.users?.first_name,
-        last_name: a.users?.last_name,
-        email: a.users?.email
-      }))
-      setAvailability(formatted)
-    }
+    if (availData) setAvailability(availData)
 
     setLoading(false)
   }
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
-
-    const userId = session.user.id
+    if (!userId) return
     const match = matches.find(m => m.id === matchId)
     if (!match || match.composition_validated) return
 
@@ -123,26 +101,21 @@ export default function DashboardJoueur() {
     fetchData()
   }
 
-  const getStatus = (matchId: string, userId: string) =>
-    availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
+  const getStatus = (matchId: string, uid: string) =>
+    availability.find(a => a.match_id === matchId && a.user_id === uid)?.status
 
-  const getSelectionStatus = (matchId: string, userId: string) =>
-    availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
+  const getSelectionStatus = (matchId: string, uid: string) =>
+    availability.find(a => a.match_id === matchId && a.user_id === uid)?.selection_status
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
-  const userId = supabase.auth.getUser()?.data.user?.id || ''
-
+  // Blocs de matchs
   const matchesEnAttente = matches.filter(m => !m.composition_validated)
-  const mesMatchs = matches.filter(
-    m =>
-      m.composition_validated &&
-      getSelectionStatus(m.id, userId) === 'selected'
+  const mesMatchs = matches.filter(m =>
+    m.composition_validated && getSelectionStatus(m.id, userId) === 'selected'
   )
-  const autresMatchs = matches.filter(
-    m =>
-      m.composition_validated &&
-      getSelectionStatus(m.id, userId) !== 'selected'
+  const autresMatchs = matches.filter(m =>
+    m.composition_validated && getSelectionStatus(m.id, userId) !== 'selected'
   )
 
   const renderMatch = (m: Match, editable: boolean) => {
@@ -154,17 +127,15 @@ export default function DashboardJoueur() {
         <div className="flex justify-between items-center">
           <div>
             <div className="font-bold text-lg">{m.opponent}</div>
-            <div className="text-gray-200">
-              {m.match_date} — {m.match_time} ({m.location_type})
-            </div>
+            <div className="text-gray-200">{m.match_date} — {m.match_time} ({m.location_type})</div>
           </div>
           {m.clubaddress && (
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
               target="_blank"
               rel="noreferrer"
-              className="ml-4 text-gray-200 hover:text-white"
-              title="Voir l'adresse sur Google Maps"
+              className="ml-4 text-white hover:text-blue-400 text-xl"
+              title="Voir sur Google Maps"
             >
               📍
             </a>
@@ -188,9 +159,7 @@ export default function DashboardJoueur() {
           </div>
         )}
 
-        {status && (
-          <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>
-        )}
+        {status && <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>}
 
         {m.composition_validated && (
           <div className="mt-2 flex items-center gap-2">
@@ -200,9 +169,7 @@ export default function DashboardJoueur() {
             <button
               className="px-2 py-1 text-black bg-yellow-400 rounded hover:bg-yellow-300 text-sm"
               onClick={() => {
-                const comp = availability.filter(
-                  a => a.match_id === m.id && a.selection_status === 'selected'
-                )
+                const comp = availability.filter(a => a.match_id === m.id && a.selection_status === 'selected')
                 setModal({ visible: true, matchName: m.opponent, composition: comp })
               }}
             >
@@ -248,7 +215,7 @@ export default function DashboardJoueur() {
             <div className="space-y-2">
               {modal.composition.map(p => {
                 const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
-                const label = fullName ? `${fullName} (${p.email})` : p.email || p.user_id
+                const label = fullName ? `${fullName} (${p.email || ''})` : p.email || 'Nom inconnu'
                 return (
                   <div key={p.user_id} className="flex justify-between p-2 bg-gray-700 rounded">
                     <span>{label}</span>
