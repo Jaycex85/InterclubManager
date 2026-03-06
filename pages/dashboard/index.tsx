@@ -9,71 +9,12 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+// ---------------- DYNAMICS ----------------
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
 const CaptainDashboard = dynamic(() => import("./capitaine/DashboardCapitaine"), { ssr: false })
+const DashboardJoueur = dynamic(() => import("./joueur/DashboardJoueur"), { ssr: false }) // ✅ vrai dashboard joueur
 
-// ---------------- PLAYER DASHBOARD COMPONENT ----------------
-const PlayerTeamDashboard = ({ teamId }: { teamId: string }) => {
-  const [matches, setMatches] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetchMatches = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) return
-      const userId = session.user.id
-
-      // fetch matches + availability pour ce joueur
-      const { data, error } = await supabase
-        .from('matches')
-        .select(`
-          *,
-          availability!inner(status, selection_status, user_id)
-        `)
-        .eq('team_id', teamId)
-        .eq('availability.user_id', userId)
-        .order('match_date', { ascending: true })
-
-      if (error) console.error(error)
-      if (data) setMatches(data)
-      setLoading(false)
-    }
-    fetchMatches()
-  }, [teamId])
-
-  if (loading) return <div>Chargement des matchs...</div>
-  if (!matches.length) return <div>Aucun match pour cette équipe.</div>
-
-  return (
-    <div className="space-y-2">
-      {matches.map(m => {
-        const avail = m.availability[0] // un seul record par joueur
-        return (
-          <div key={m.id} className={`p-2 rounded ${avail?.status === 'available' ? 'bg-gray-700' : 'bg-gray-800 opacity-70'}`}>
-            <div>
-              {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
-              {m.clubaddress && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-2 text-blue-400 underline"
-                >
-                  📍
-                </a>
-              )}
-            </div>
-            <div>
-              Votre statut : <span className="font-bold">{avail?.status}</span> | Sélection : <span className="font-bold">{avail?.selection_status}</span>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ---------------- INDEX DASHBOARD ----------------
+// ---------------- INDEX DASHBOARD TYPES ----------------
 type Roles = {
   admin: boolean
   player: boolean
@@ -93,6 +34,7 @@ type TeamMembership = {
   role: "player" | "captain"
 }
 
+// ---------------- INDEX DASHBOARD ----------------
 export default function DashboardIndex() {
   const [roles, setRoles] = useState<Roles>({
     admin: false,
@@ -191,31 +133,31 @@ export default function DashboardIndex() {
           </div>
         )}
 
-{/* ---------- PLAYER PANELS ---------- */}
-{roles.player && teamMemberships
-  .filter(t => t.role === "player" || t.role === "captain") // captains inclus pour voir le dashboard joueur
-  .map(t => {
-    const panelKey = `player-${t.team_id}`
-    return (
-      <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
-        <button
-          className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-          onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
-        >
-          Joueur - {t.team_name}
-        </button>
+        {/* ---------- PLAYER PANELS ---------- */}
+        {roles.player && teamMemberships
+          .filter(t => t.role === "player" || t.role === "captain") // captains inclus
+          .map(t => {
+            const panelKey = `player-${t.team_id}`
+            return (
+              <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
+                <button
+                  className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+                  onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
+                >
+                  Joueur - {t.team_name}
+                </button>
+                <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
+                  {openPanel === panelKey && (
+                    <div className="p-4">
+                      {/* ⚡ Utilisation du vrai DashboardJoueur */}
+                      <DashboardJoueur />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
 
-        <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
-          {openPanel === panelKey && (
-            <div className="p-4">
-              {/* ⚡ Utilisation du vrai DashboardJoueur */}
-              <PlayerDashboard teamId={t.team_id} />
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  })}
         {/* ---------- CAPTAIN PANELS ---------- */}
         {roles.captain && teamMemberships
           .filter(t => t.role === "captain")
