@@ -191,30 +191,31 @@ export default function DashboardIndex() {
           </div>
         )}
 
-        {/* ---------- PLAYER PANELS ---------- */}
-        {roles.player && teamMemberships
-          .filter(t => t.role === "player" || t.role === "captain") // captains inclus pour voir dashboard joueur
-          .map(t => {
-            const panelKey = `player-${t.team_id}`
-            return (
-              <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
-                <button
-                  className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-                  onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
-                >
-                  Joueur - {t.team_name}
-                </button>
-                <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
-                  {openPanel === panelKey && (
-                    <div className="p-4">
-                      <PlayerTeamDashboard teamId={t.team_id} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+{/* ---------- PLAYER PANELS ---------- */}
+{roles.player && teamMemberships
+  .filter(t => t.role === "player" || t.role === "captain") // captains inclus pour voir le dashboard joueur
+  .map(t => {
+    const panelKey = `player-${t.team_id}`
+    return (
+      <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
+        <button
+          className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+          onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
+        >
+          Joueur - {t.team_name}
+        </button>
 
+        <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
+          {openPanel === panelKey && (
+            <div className="p-4">
+              {/* ⚡ Utilisation du vrai DashboardJoueur */}
+              <PlayerDashboard teamId={t.team_id} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  })}
         {/* ---------- CAPTAIN PANELS ---------- */}
         {roles.captain && teamMemberships
           .filter(t => t.role === "captain")
