@@ -49,7 +49,6 @@ export default function DashboardJoueur() {
 
     const userId = session.user.id
 
-    // 1️⃣ récupérer les équipes du joueur
     const { data: memberships } = await supabase
       .from('team_memberships')
       .select('team_id')
@@ -61,7 +60,6 @@ export default function DashboardJoueur() {
       return
     }
 
-    // 2️⃣ récupérer les matchs
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
@@ -70,7 +68,6 @@ export default function DashboardJoueur() {
 
     if (matchesData) setMatches(matchesData)
 
-    // 3️⃣ récupérer availability du joueur
     const { data: availData } = await supabase
       .from('availability')
       .select('*')
@@ -125,17 +122,17 @@ export default function DashboardJoueur() {
     const selection = getSelectionStatus(m.id)
 
     const bgColor = editable
-      ? 'bg-yellow-800'
+      ? 'bg-orange-600'      // matchs en attente
       : selection === 'selected'
-        ? 'bg-green-700'
-        : 'bg-gray-700'
+        ? 'bg-green-600'     // mes matchs
+        : 'bg-gray-500'      // autres matchs
 
     return (
-      <div key={m.id} className={`p-4 rounded border border-gray-600 ${bgColor}`}>
+      <div key={m.id} className={`p-4 rounded border border-gray-700 ${bgColor}`}>
         <div className="flex justify-between items-center">
           <div>
-            <div className="font-bold text-lg">vs {m.opponent}</div>
-            <div className="text-gray-300">
+            <div className="font-bold text-lg">{m.opponent}</div>
+            <div className="text-gray-200">
               {m.match_date} — {m.match_time} ({m.location_type})
             </div>
           </div>
@@ -155,13 +152,13 @@ export default function DashboardJoueur() {
           <div className="mt-3 flex gap-2">
             <button
               onClick={() => setStatus(m.id, 'available')}
-              className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-500' : 'bg-gray-600 hover:bg-green-400'}`}
+              className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-400 text-black' : 'bg-gray-700 hover:bg-green-300'}`}
             >
               Disponible
             </button>
             <button
               onClick={() => setStatus(m.id, 'unavailable')}
-              className={`px-3 py-1 rounded font-bold ${status === 'unavailable' ? 'bg-red-500' : 'bg-gray-600 hover:bg-red-400'}`}
+              className={`px-3 py-1 rounded font-bold ${status === 'unavailable' ? 'bg-red-400 text-black' : 'bg-gray-700 hover:bg-red-300'}`}
             >
               Indisponible
             </button>
@@ -169,7 +166,7 @@ export default function DashboardJoueur() {
         )}
 
         {status && (
-          <div className="text-sm mt-2 text-gray-200">Statut actuel : {status}</div>
+          <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>
         )}
 
         {m.composition_validated && (
@@ -181,7 +178,7 @@ export default function DashboardJoueur() {
               className="px-2 py-1 text-black bg-yellow-400 rounded hover:bg-yellow-300 text-sm"
               onClick={() => {
                 const comp = availability.filter(a => a.match_id === m.id)
-                setModal({ visible: true, matchName: `vs ${m.opponent}`, composition: comp })
+                setModal({ visible: true, matchName: m.opponent, composition: comp })
               }}
             >
               Voir composition
@@ -198,38 +195,37 @@ export default function DashboardJoueur() {
 
       {matchesEnAttente.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-gray-200">Matchs en attente</h2>
+          <h2 className="text-xl font-bold text-orange-300">Matchs en attente</h2>
           {matchesEnAttente.map(m => renderMatch(m, true))}
         </div>
       )}
 
       {mesMatchs.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-gray-200">Mes matchs</h2>
+          <h2 className="text-xl font-bold text-green-300">Mes matchs</h2>
           {mesMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
 
       {autresMatchs.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-gray-200">Autres matchs</h2>
+          <h2 className="text-xl font-bold text-gray-300">Autres matchs</h2>
           {autresMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
 
       {matches.length === 0 && <div>Aucun match pour le moment</div>}
 
-      {/* Modal Composition */}
       {modal.visible && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-900 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
-            <h2 className="text-xl font-bold mb-4">{modal.matchName}</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
+            <h2 className="text-xl font-bold mb-4 text-yellow-400">{modal.matchName}</h2>
             <div className="space-y-2">
               {modal.composition.map(p => {
                 const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
                 const label = fullName ? `${fullName} (${p.email})` : p.email
                 return (
-                  <div key={p.user_id} className="flex justify-between p-2 bg-gray-800 rounded">
+                  <div key={p.user_id} className="flex justify-between p-2 bg-gray-700 rounded">
                     <span>{label}</span>
                     <span className={`font-bold ${p.selection_status === 'selected' ? 'text-green-400' : 'text-gray-400'}`}>
                       {p.selection_status || 'Non sélectionné'}
