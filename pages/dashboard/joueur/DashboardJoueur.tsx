@@ -9,12 +9,13 @@ type Match = {
   match_date: string
   match_time: string
   location_type: string
-  clubaddress?: string
+  composition_validated: boolean
 }
 
 type Availability = {
   match_id: string
   status: 'available' | 'maybe' | 'unavailable'
+  selection_status: 'selected' | 'not_selected' | 'absent' | null
 }
 
 export default function DashboardJoueur() {
@@ -27,46 +28,39 @@ export default function DashboardJoueur() {
   }, [])
 
   const fetchData = async () => {
-    setLoading(true)
-
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
 
     const userId = session.user.id
 
-    // 1️⃣ Récupérer les teams du joueur (inclut les capitaines)
+    // 1️⃣ récupérer les équipes du joueur
     const { data: memberships } = await supabase
       .from('team_memberships')
-      .select('team_id, role')
+      .select('team_id')
       .eq('user_id', userId)
-      .in('role', ['player', 'captain']) // <-- important !
 
     const teamIds = memberships?.map(m => m.team_id) || []
-    if (teamIds.length === 0) {
-      setMatches([])
-      setAvailability([])
+    if (!teamIds.length) {
       setLoading(false)
       return
     }
 
-    // 2️⃣ Récupérer les matchs de ces équipes
-    const { data: matchesData, error: matchError } = await supabase
+    // 2️⃣ récupérer les matchs de ces équipes
+    const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
       .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (matchError) console.error(matchError)
     if (matchesData) setMatches(matchesData)
 
-    // 3️⃣ Récupérer availability du joueur pour ces matchs
-    const { data: availData, error: availError } = await supabase
+    // 3️⃣ récupérer la disponibilité du joueur
+    const { data: availData } = await supabase
       .from('availability')
-      .select('match_id, status')
+      .select('*')
       .eq('user_id', userId)
       .in('match_id', matchesData?.map(m => m.id) || [])
 
-    if (availError) console.error(availError)
     if (availData) setAvailability(availData)
 
     setLoading(false)
@@ -75,7 +69,11 @@ export default function DashboardJoueur() {
   const setStatus = async (matchId: string, status: 'available' | 'maybe' | 'unavailable') => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
+
     const userId = session.user.id
+
+    const match = matches.find(m => m.id === matchId)
+    if (!match || match.composition_validated) return // bloquer si composition validée
 
     const existing = availability.find(a => a.match_id === matchId)
 
@@ -95,7 +93,6 @@ export default function DashboardJoueur() {
         })
     }
 
-    // rafraîchir localement
     fetchData()
   }
 
@@ -104,73 +101,97 @@ export default function DashboardJoueur() {
     return a?.status
   }
 
+  const getSelectionStatus = (matchId: string) => {
+    const a = availability.find(av => av.match_id === matchId)
+    return a?.selection_status
+  }
+
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6">
-        Dashboard Joueur
-      </h1>
+  // 4️⃣ filtrer les matchs par bloc
+  const matchesEnAttente = matches.filter(m => !m.composition_validated)
+  const mesMatchs = matches.filter(m =>
+    m.composition_validated &&
+    getSelectionStatus(m.id) === 'selected'
+  )
+  const autresMatchs = matches.filter(m =>
+    m.composition_validated &&
+    getSelectionStatus(m.id) !== 'selected'
+  )
 
-      {matches.length === 0 && (
-        <div>Aucun match pour le moment</div>
+  const renderMatch = (m: Match, editable: boolean) => {
+    const status = getStatus(m.id)
+    return (
+      <div key={m.id} className="bg-gray-800 p-4 rounded border border-gray-700">
+        <div className="font-bold text-lg">vs {m.opponent}</div>
+        <div className="text-gray-300">
+          {m.match_date} — {m.match_time} ({m.location_type})
+        </div>
+
+        {editable && (
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => setStatus(m.id, 'available')}
+              className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-600' : 'bg-gray-700 hover:bg-green-500'}`}
+            >
+              Disponible
+            </button>
+            <button
+              onClick={() => setStatus(m.id, 'maybe')}
+              className={`px-3 py-1 rounded font-bold ${status === 'maybe' ? 'bg-yellow-500' : 'bg-gray-700 hover:bg-yellow-400'}`}
+            >
+              Peut-être
+            </button>
+            <button
+              onClick={() => setStatus(m.id, 'unavailable')}
+              className={`px-3 py-1 rounded font-bold ${status === 'unavailable' ? 'bg-red-600' : 'bg-gray-700 hover:bg-red-500'}`}
+            >
+              Indisponible
+            </button>
+          </div>
+        )}
+
+        {status && (
+          <div className="text-sm mt-2 text-gray-400">
+            Statut actuel : {status}
+          </div>
+        )}
+
+        {m.composition_validated && (
+          <div className="text-sm mt-1 text-green-400">
+            Composition validée — {getSelectionStatus(m.id) === 'selected' ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
+      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard Joueur</h1>
+
+      {matchesEnAttente.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-gray-200">Matchs en attente</h2>
+          {matchesEnAttente.map(m => renderMatch(m, true))}
+        </div>
       )}
 
-      <div className="space-y-4">
-        {matches.map(match => {
-          const status = getStatus(match.id)
-          return (
-            <div
-              key={match.id}
-              className={`bg-gray-800 p-4 rounded border border-gray-700`}
-            >
-              <div className="font-bold text-lg">
-                vs {match.opponent}
-              </div>
+      {mesMatchs.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-gray-200">Mes matchs</h2>
+          {mesMatchs.map(m => renderMatch(m, false))}
+        </div>
+      )}
 
-              <div className="text-gray-300">
-                {match.match_date} — {match.match_time} ({match.location_type})
-                {match.clubaddress && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(match.clubaddress)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ml-2 text-blue-400 underline"
-                  >
-                    📍
-                  </a>
-                )}
-              </div>
+      {autresMatchs.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-gray-200">Autres matchs</h2>
+          {autresMatchs.map(m => renderMatch(m, false))}
+        </div>
+      )}
 
-              <div className="mt-4 flex gap-2">
-                {['available', 'maybe', 'unavailable'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setStatus(match.id, s as 'available' | 'maybe' | 'unavailable')}
-                    className={`px-3 py-1 rounded font-bold ${
-                      status === s
-                        ? s === 'available'
-                          ? 'bg-green-600'
-                          : s === 'maybe'
-                          ? 'bg-yellow-500'
-                          : 'bg-red-600'
-                        : 'bg-gray-700 hover:bg-opacity-80'
-                    }`}
-                  >
-                    {s === 'available' ? 'Disponible' : s === 'maybe' ? 'Peut-être' : 'Indisponible'}
-                  </button>
-                ))}
-              </div>
-
-              {status && (
-                <div className="text-sm mt-2 text-gray-400">
-                  Statut actuel : {status}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {matches.length === 0 && <div>Aucun match pour le moment</div>}
     </div>
   )
 }
