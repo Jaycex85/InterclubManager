@@ -150,10 +150,10 @@ export default function DashboardIndex() {
       }))
       setTeamMemberships(teams)
 
-      // 3️⃣ Global roles
+      // 3️⃣ Global roles — captains peuvent aussi voir dashboard joueur
       setRoles({
         admin: userData.role === "admin",
-        player: teams.some(t => t.role === "player"),
+        player: teams.some(t => t.role === "player" || t.role === "captain"),
         captain: teams.some(t => t.role === "captain"),
         club_admin: clubs.some(c => c.role === "club_admin")
       })
@@ -191,29 +191,29 @@ export default function DashboardIndex() {
           </div>
         )}
 
-{/* ---------- PLAYER PANELS ---------- */}
-{roles.player && teamMemberships
-  .filter(t => t.role === "player" || t.role === "captain") // <- captains inclus
-  .map(t => {
-    const panelKey = `player-${t.team_id}`
-    return (
-      <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
-        <button
-          className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-          onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
-        >
-          Joueur - {t.team_name}
-        </button>
-        <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
-          {openPanel === panelKey && (
-            <div className="p-4">
-              <PlayerTeamDashboard teamId={t.team_id} />
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  })}
+        {/* ---------- PLAYER PANELS ---------- */}
+        {roles.player && teamMemberships
+          .filter(t => t.role === "player" || t.role === "captain") // captains inclus pour voir dashboard joueur
+          .map(t => {
+            const panelKey = `player-${t.team_id}`
+            return (
+              <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
+                <button
+                  className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+                  onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
+                >
+                  Joueur - {t.team_name}
+                </button>
+                <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
+                  {openPanel === panelKey && (
+                    <div className="p-4">
+                      <PlayerTeamDashboard teamId={t.team_id} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
 
         {/* ---------- CAPTAIN PANELS ---------- */}
         {roles.captain && teamMemberships
