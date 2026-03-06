@@ -14,8 +14,8 @@ type Player = {
   email: string
   first_name?: string
   last_name?: string
-  status: 'available' | 'unavailable' | 'unknown'
-  selection_status: 'selected' | 'not_selected' | null
+  status: 'available' | 'maybe' | 'unavailable'
+  selection_status: 'selected' | 'not_selected'
 }
 
 export default function EditComposition({ matchId, onSaved, onClose }: Props) {
@@ -23,9 +23,10 @@ export default function EditComposition({ matchId, onSaved, onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Fetch players and availability for this match
+  // Fetch players + availability
   const fetchPlayers = async () => {
     setLoading(true)
+
     const { data, error } = await supabase
       .from('availability')
       .select(`
@@ -36,17 +37,24 @@ export default function EditComposition({ matchId, onSaved, onClose }: Props) {
       `)
       .eq('match_id', matchId)
 
-    if (!error && data) {
+    if (error) {
+      console.error(error)
+      setLoading(false)
+      return
+    }
+
+    if (data) {
       const formatted = data.map((p: any) => ({
         user_id: p.user_id,
         email: p.users.email,
         first_name: p.users.first_name,
         last_name: p.users.last_name,
         status: p.status,
-        selection_status: p.selection_status
+        selection_status: p.selection_status || 'not_selected'
       }))
       setPlayers(formatted)
     }
+
     setLoading(false)
   }
 
@@ -60,8 +68,7 @@ export default function EditComposition({ matchId, onSaved, onClose }: Props) {
         p.user_id === userId
           ? {
               ...p,
-              selection_status:
-                p.selection_status === 'selected' ? 'not_selected' : 'selected'
+              selection_status: p.selection_status === 'selected' ? 'not_selected' : 'selected'
             }
           : p
       )
@@ -70,25 +77,25 @@ export default function EditComposition({ matchId, onSaved, onClose }: Props) {
 
   const handleSave = async () => {
     setSaving(true)
-    // Met à jour les selection_status dans la table availability
-    for (const p of players) {
-      await supabase
+    const updates = players.map(p =>
+      supabase
         .from('availability')
         .update({ selection_status: p.selection_status })
         .eq('match_id', matchId)
         .eq('user_id', p.user_id)
-    }
+    )
+    await Promise.all(updates)
     setSaving(false)
     onSaved()
   }
 
-  if (loading) return <div>Chargement des joueurs...</div>
+  if (loading) return <div className="text-white p-4">Chargement des joueurs...</div>
 
   return (
-    <div className="p-4 bg-gray-900 text-white rounded">
+    <div className="p-4 bg-gray-900 text-white rounded max-h-[80vh] overflow-y-auto">
       <h2 className="text-xl font-bold mb-4">Composition du match</h2>
 
-      <div className="space-y-2 max-h-96 overflow-y-auto">
+      <div className="space-y-2">
         {players.map(p => {
           const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
           const label = fullName ? `${fullName} - ${p.email}` : p.email
@@ -122,7 +129,7 @@ export default function EditComposition({ matchId, onSaved, onClose }: Props) {
         })}
       </div>
 
-      <div className="mt-4 flex justify-end space-x-2">
+      <div className="mt-4 flex justify-end gap-2">
         <button
           className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded"
           onClick={onClose}
