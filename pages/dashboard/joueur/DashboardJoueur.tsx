@@ -71,7 +71,6 @@ export default function DashboardJoueur() {
     const { data: availData } = await supabase
       .from('availability')
       .select('*')
-      .eq('user_id', userId)
       .in('match_id', matchesData?.map(m => m.id) || [])
 
     if (availData) setAvailability(availData)
@@ -87,7 +86,7 @@ export default function DashboardJoueur() {
     const match = matches.find(m => m.id === matchId)
     if (!match || match.composition_validated) return
 
-    const existing = availability.find(a => a.match_id === matchId)
+    const existing = availability.find(a => a.match_id === matchId && a.user_id === userId)
 
     if (existing) {
       await supabase
@@ -104,31 +103,26 @@ export default function DashboardJoueur() {
     fetchData()
   }
 
-  const getStatus = (matchId: string) => availability.find(a => a.match_id === matchId)?.status
-  const getSelectionStatus = (matchId: string) => availability.find(a => a.match_id === matchId)?.selection_status
+  const getStatus = (matchId: string, userId: string) => availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
+  const getSelectionStatus = (matchId: string, userId: string) => availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
   const matchesEnAttente = matches.filter(m => !m.composition_validated)
   const mesMatchs = matches.filter(m =>
-    m.composition_validated && getSelectionStatus(m.id) === 'selected'
+    m.composition_validated && getSelectionStatus(m.id, supabase.auth.getUser()?.data.user?.id || '') === 'selected'
   )
   const autresMatchs = matches.filter(m =>
-    m.composition_validated && getSelectionStatus(m.id) !== 'selected'
+    m.composition_validated && getSelectionStatus(m.id, supabase.auth.getUser()?.data.user?.id || '') !== 'selected'
   )
 
   const renderMatch = (m: Match, editable: boolean) => {
-    const status = getStatus(m.id)
-    const selection = getSelectionStatus(m.id)
-
-    const bgColor = editable
-      ? 'bg-orange-600'      // matchs en attente
-      : selection === 'selected'
-        ? 'bg-green-600'     // mes matchs
-        : 'bg-gray-500'      // autres matchs
+    const userId = supabase.auth.getUser()?.data.user?.id || ''
+    const status = getStatus(m.id, userId)
+    const selection = getSelectionStatus(m.id, userId)
 
     return (
-      <div key={m.id} className={`p-4 rounded border border-gray-700 ${bgColor}`}>
+      <div key={m.id} className="p-4 rounded border border-gray-700 bg-gray-800">
         <div className="flex justify-between items-center">
           <div>
             <div className="font-bold text-lg">{m.opponent}</div>
@@ -177,7 +171,7 @@ export default function DashboardJoueur() {
             <button
               className="px-2 py-1 text-black bg-yellow-400 rounded hover:bg-yellow-300 text-sm"
               onClick={() => {
-                const comp = availability.filter(a => a.match_id === m.id)
+                const comp = availability.filter(a => a.match_id === m.id && a.selection_status === 'selected')
                 setModal({ visible: true, matchName: m.opponent, composition: comp })
               }}
             >
@@ -195,21 +189,21 @@ export default function DashboardJoueur() {
 
       {matchesEnAttente.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-orange-300">Matchs en attente</h2>
+          <h2 className="text-xl font-bold text-orange-400">Matchs en attente</h2>
           {matchesEnAttente.map(m => renderMatch(m, true))}
         </div>
       )}
 
       {mesMatchs.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-green-300">Mes matchs</h2>
+          <h2 className="text-xl font-bold text-green-400">Mes matchs</h2>
           {mesMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
 
       {autresMatchs.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-xl font-bold text-gray-300">Autres matchs</h2>
+          <h2 className="text-xl font-bold text-red-400">Autres matchs</h2>
           {autresMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
@@ -227,9 +221,7 @@ export default function DashboardJoueur() {
                 return (
                   <div key={p.user_id} className="flex justify-between p-2 bg-gray-700 rounded">
                     <span>{label}</span>
-                    <span className={`font-bold ${p.selection_status === 'selected' ? 'text-green-400' : 'text-gray-400'}`}>
-                      {p.selection_status || 'Non sélectionné'}
-                    </span>
+                    <span className="font-bold text-green-400">Sélectionné</span>
                   </div>
                 )
               })}
