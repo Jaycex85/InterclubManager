@@ -10,6 +10,7 @@ type Match = {
   match_time: string
   location_type: string
   composition_validated: boolean
+  clubaddress?: string
 }
 
 type Availability = {
@@ -41,7 +42,6 @@ export default function DashboardJoueur() {
 
     const userId = session.user.id
 
-    // 1️⃣ récupérer les équipes du joueur
     const { data: memberships } = await supabase
       .from('team_memberships')
       .select('team_id')
@@ -53,7 +53,6 @@ export default function DashboardJoueur() {
       return
     }
 
-    // 2️⃣ récupérer les matchs
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
@@ -62,7 +61,6 @@ export default function DashboardJoueur() {
 
     if (matchesData) setMatches(matchesData)
 
-    // 3️⃣ récupérer availability
     const { data: availData } = await supabase
       .from('availability')
       .select('*')
@@ -70,32 +68,22 @@ export default function DashboardJoueur() {
       .in('match_id', matchesData?.map(m => m.id) || [])
 
     if (availData) setAvailability(availData)
-
     setLoading(false)
   }
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session?.user) return
-
     const userId = session.user.id
     const match = matches.find(m => m.id === matchId)
     if (!match || match.composition_validated) return
 
     const existing = availability.find(a => a.match_id === matchId)
-
     if (existing) {
-      await supabase
-        .from('availability')
-        .update({ status })
-        .eq('match_id', matchId)
-        .eq('user_id', userId)
+      await supabase.from('availability').update({ status }).eq('match_id', matchId).eq('user_id', userId)
     } else {
-      await supabase
-        .from('availability')
-        .insert({ match_id: matchId, user_id: userId, status })
+      await supabase.from('availability').insert({ match_id: matchId, user_id, status })
     }
-
     fetchData()
   }
 
@@ -133,31 +121,56 @@ export default function DashboardJoueur() {
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
-  // 4️⃣ filtrer les matchs
   const matchesEnAttente = matches.filter(m => !m.composition_validated)
   const mesMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
   const autresMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
 
-  const renderMatch = (m: Match, editable: boolean) => {
+  const renderMatch = (m: Match, editable: boolean, blockType: 'waiting' | 'mine' | 'others') => {
     const status = getStatus(m.id)
     const selected = getSelectionStatus(m.id) === 'selected'
 
+    let bgColor = 'bg-gray-800'
+    if (blockType === 'waiting') bgColor = 'bg-orange-800'
+    else if (blockType === 'mine') bgColor = 'bg-green-800'
+    else if (blockType === 'others') bgColor = 'bg-gray-700'
+
+    const statusBadge = status === 'available'
+      ? <span className="px-2 py-1 rounded-full bg-green-400 text-black font-bold">✅ Disponible</span>
+      : <span className="px-2 py-1 rounded-full bg-red-600 text-white font-bold">⚪ Indisponible</span>
+
+    const selectionBadge = m.composition_validated
+      ? selected
+        ? <span className="px-2 py-1 rounded-full bg-yellow-400 text-black font-bold">⭐ Sélectionné</span>
+        : <span className="px-2 py-1 rounded-full bg-gray-600 text-white font-bold">❌ Non sélectionné</span>
+      : null
+
     return (
-      <div key={m.id} className="bg-gray-800 p-4 rounded border border-gray-700">
-        <div className="font-bold text-lg flex justify-between items-center">
-          <span>vs {m.opponent}</span>
-          {m.composition_validated && (
-            <button
-              className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-500 rounded"
-              onClick={() => openComposition(m)}
-            >
-              Voir composition
-            </button>
-          )}
+      <div key={m.id} className={`${bgColor} p-4 rounded border border-gray-700 flex flex-col gap-2`}>
+        <div className="flex justify-between items-center">
+          <div className="font-bold text-lg">vs {m.opponent}</div>
+          <div className="flex gap-2">
+            {m.clubaddress && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm"
+              >
+                📍
+              </a>
+            )}
+            {m.composition_validated && (
+              <button
+                className="px-2 py-1 text-sm bg-blue-600 hover:bg-blue-500 rounded"
+                onClick={() => openComposition(m)}
+              >
+                Voir composition
+              </button>
+            )}
+          </div>
         </div>
-        <div className="text-gray-300">
-          {m.match_date} — {m.match_time} ({m.location_type})
-        </div>
+        <div className="text-gray-300">{m.match_date} — {m.match_time} ({m.location_type})</div>
+        <div className="flex gap-2 flex-wrap mt-2">{statusBadge}{selectionBadge}</div>
 
         {editable && (
           <div className="mt-3 flex gap-2">
@@ -165,26 +178,14 @@ export default function DashboardJoueur() {
               onClick={() => setStatus(m.id, 'available')}
               className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-600' : 'bg-gray-700 hover:bg-green-500'}`}
             >
-              Disponible
+              ✅
             </button>
             <button
               onClick={() => setStatus(m.id, 'unavailable')}
               className={`px-3 py-1 rounded font-bold ${status === 'unavailable' ? 'bg-red-600' : 'bg-gray-700 hover:bg-red-500'}`}
             >
-              Indisponible
+              ⚪
             </button>
-          </div>
-        )}
-
-        {status && (
-          <div className="text-sm mt-2 text-gray-400">
-            Statut actuel : {status}
-          </div>
-        )}
-
-        {m.composition_validated && (
-          <div className={`text-sm mt-1 font-bold ${selected ? 'text-green-400' : 'text-red-400'}`}>
-            {selected ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
           </div>
         )}
       </div>
@@ -198,21 +199,21 @@ export default function DashboardJoueur() {
       {matchesEnAttente.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-gray-200">Matchs en attente</h2>
-          {matchesEnAttente.map(m => renderMatch(m, true))}
+          {matchesEnAttente.map(m => renderMatch(m, true, 'waiting'))}
         </div>
       )}
 
       {mesMatchs.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-gray-200">Mes matchs</h2>
-          {mesMatchs.map(m => renderMatch(m, false))}
+          {mesMatchs.map(m => renderMatch(m, false, 'mine'))}
         </div>
       )}
 
       {autresMatchs.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-xl font-bold text-gray-200">Autres matchs</h2>
-          {autresMatchs.map(m => renderMatch(m, false))}
+          {autresMatchs.map(m => renderMatch(m, false, 'others'))}
         </div>
       )}
 
@@ -223,9 +224,10 @@ export default function DashboardJoueur() {
             <div className="space-y-2">
               {modal.composition.map(p => {
                 const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
+                const selectionIcon = p.selection_status === 'selected' ? '⭐' : '❌'
                 return (
                   <div key={p.user_id} className={`p-2 rounded ${p.selection_status === 'selected' ? 'bg-green-700' : 'bg-gray-700'}`}>
-                    {fullName || p.email} — {p.selection_status}
+                    {selectionIcon} {fullName || p.email} — {p.selection_status}
                   </div>
                 )
               })}
