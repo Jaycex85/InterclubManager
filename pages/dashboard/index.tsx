@@ -12,20 +12,68 @@ const supabase = createClient(
 const AdminDashboard = dynamic(() => import("./admin/AdminDashboard"), { ssr: false })
 const CaptainDashboard = dynamic(() => import("./capitaine/DashboardCapitaine"), { ssr: false })
 
-const PlayerDashboardTile = ({ clubName, role }: { clubName: string, role: string }) => (
-  <div className="bg-gray-800 p-4 rounded shadow">
-    <h2 className="font-bold text-lg">{clubName}</h2>
-    <p>Rôle : {role}</p>
-  </div>
-)
+// ---------------- PLAYER DASHBOARD COMPONENT ----------------
+const PlayerTeamDashboard = ({ teamId }: { teamId: string }) => {
+  const [matches, setMatches] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-const CaptainDashboardTile = ({ teamName, role }: { teamName: string, role: string }) => (
-  <div className="bg-gray-800 p-4 rounded shadow">
-    <h2 className="font-bold text-lg">{teamName}</h2>
-    <p>Rôle : {role}</p>
-  </div>
-)
+  useEffect(() => {
+    const fetchMatches = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) return
+      const userId = session.user.id
 
+      // fetch matches + availability pour ce joueur
+      const { data, error } = await supabase
+        .from('matches')
+        .select(`
+          *,
+          availability!inner(status, selection_status, user_id)
+        `)
+        .eq('team_id', teamId)
+        .eq('availability.user_id', userId)
+        .order('match_date', { ascending: true })
+
+      if (error) console.error(error)
+      if (data) setMatches(data)
+      setLoading(false)
+    }
+    fetchMatches()
+  }, [teamId])
+
+  if (loading) return <div>Chargement des matchs...</div>
+  if (!matches.length) return <div>Aucun match pour cette équipe.</div>
+
+  return (
+    <div className="space-y-2">
+      {matches.map(m => {
+        const avail = m.availability[0] // un seul record par joueur
+        return (
+          <div key={m.id} className={`p-2 rounded ${avail?.status === 'available' ? 'bg-gray-700' : 'bg-gray-800 opacity-70'}`}>
+            <div>
+              {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
+              {m.clubaddress && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 text-blue-400 underline"
+                >
+                  📍
+                </a>
+              )}
+            </div>
+            <div>
+              Votre statut : <span className="font-bold">{avail?.status}</span> | Sélection : <span className="font-bold">{avail?.selection_status}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------- INDEX DASHBOARD ----------------
 type Roles = {
   admin: boolean
   player: boolean
@@ -46,7 +94,6 @@ type TeamMembership = {
 }
 
 export default function DashboardIndex() {
-
   const [roles, setRoles] = useState<Roles>({
     admin: false,
     player: false,
@@ -55,7 +102,6 @@ export default function DashboardIndex() {
   })
   const [loading, setLoading] = useState(true)
   const [openPanel, setOpenPanel] = useState<string | null>(null)
-
   const [clubMemberships, setClubMemberships] = useState<ClubMembership[]>([])
   const [teamMemberships, setTeamMemberships] = useState<TeamMembership[]>([])
 
@@ -80,12 +126,11 @@ export default function DashboardIndex() {
 
       const userId = userData.id
 
-      // 1️⃣ Fetch club memberships
+      // 1️⃣ Club memberships
       const { data: clubsData } = await supabase
         .from("club_memberships")
         .select("club_id, role, clubs(name)")
         .eq("user_id", userId)
-
       const clubs: ClubMembership[] = (clubsData || []).map((m: any) => ({
         club_id: m.club_id,
         club_name: m.clubs.name,
@@ -93,12 +138,11 @@ export default function DashboardIndex() {
       }))
       setClubMemberships(clubs)
 
-      // 2️⃣ Fetch team memberships
+      // 2️⃣ Team memberships
       const { data: teamsData } = await supabase
         .from("team_memberships")
         .select("team_id, role, teams(name)")
         .eq("user_id", userId)
-
       const teams: TeamMembership[] = (teamsData || []).map((m: any) => ({
         team_id: m.team_id,
         team_name: m.teams.name,
@@ -106,7 +150,7 @@ export default function DashboardIndex() {
       }))
       setTeamMemberships(teams)
 
-      // 3️⃣ Définir les rôles globaux
+      // 3️⃣ Global roles
       setRoles({
         admin: userData.role === "admin",
         player: teams.some(t => t.role === "player"),
@@ -150,23 +194,26 @@ export default function DashboardIndex() {
         {/* ---------- PLAYER PANELS ---------- */}
         {roles.player && teamMemberships
           .filter(t => t.role === "player")
-          .map(t => (
-            <div key={`player-${t.team_id}`} className="border border-gray-700 rounded overflow-hidden">
-              <button
-                className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-                onClick={() => setOpenPanel(openPanel === `player-${t.team_id}` ? null : `player-${t.team_id}`)}
-              >
-                Joueur - {t.team_name}
-              </button>
-              <div className={`transition-all duration-500 overflow-hidden ${openPanel === `player-${t.team_id}` ? "max-h-[5000px]" : "max-h-0"}`}>
-                {openPanel === `player-${t.team_id}` && (
-                  <div className="p-4">
-                    <PlayerDashboardTile clubName={t.team_name} role="player" />
-                  </div>
-                )}
+          .map(t => {
+            const panelKey = `player-${t.team_id}`
+            return (
+              <div key={panelKey} className="border border-gray-700 rounded overflow-hidden">
+                <button
+                  className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
+                  onClick={() => setOpenPanel(openPanel === panelKey ? null : panelKey)}
+                >
+                  Joueur - {t.team_name}
+                </button>
+                <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
+                  {openPanel === panelKey && (
+                    <div className="p-4">
+                      <PlayerTeamDashboard teamId={t.team_id} />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
         {/* ---------- CAPTAIN PANELS ---------- */}
         {roles.captain && teamMemberships
