@@ -24,22 +24,30 @@ type User = {
 type Membership = {
   user_id: string
   role: string
-  users: User
+  user: User
 }
 
 export default function DashboardClubAdmin() {
+
   const [clubs,setClubs] = useState<Club[]>([])
   const [selectedClub,setSelectedClub] = useState<string | null>(null)
 
   const [teams,setTeams] = useState<Team[]>([])
   const [members,setMembers] = useState<Membership[]>([])
 
-  const [newTeamName,setNewTeamName] = useState('')
-  const [selectedTeam,setSelectedTeam] = useState<string>('')
-
   const [loading,setLoading] = useState(true)
 
-  useEffect(()=>{ loadClubs() },[])
+  const [showCreateTeamModal,setShowCreateTeamModal] = useState(false)
+  const [showManageTeamModal,setShowManageTeamModal] = useState(false)
+
+  const [newTeamName,setNewTeamName] = useState('')
+
+  const [teamToManage,setTeamToManage] = useState<Team | null>(null)
+  const [teamMembers,setTeamMembers] = useState<Membership[]>([])
+
+  useEffect(()=>{
+    loadClubs()
+  },[])
 
   const loadClubs = async () => {
 
@@ -100,12 +108,28 @@ export default function DashboardClubAdmin() {
     `)
     .eq('club_id',clubId)
 
-    if(membersData) setMembers(membersData as Membership[])
+    if(membersData){
+
+      const formatted:Membership[] = membersData.map((m:any)=>({
+
+        user_id:m.user_id,
+        role:m.role,
+        user:{
+          id:m.users?.id || m.users?.[0]?.id,
+          email:m.users?.email || m.users?.[0]?.email,
+          first_name:m.users?.first_name || m.users?.[0]?.first_name,
+          last_name:m.users?.last_name || m.users?.[0]?.last_name
+        }
+
+      }))
+
+      setMembers(formatted)
+    }
   }
 
   const createTeam = async () => {
 
-    if(!newTeamName || !selectedClub) return
+    if(!selectedClub || !newTeamName) return
 
     await supabase
     .from('teams')
@@ -115,164 +139,293 @@ export default function DashboardClubAdmin() {
     })
 
     setNewTeamName('')
+    setShowCreateTeamModal(false)
+
     loadClubData(selectedClub)
   }
 
-  const addPlayerToTeam = async (userId:string, role:string) => {
+  const loadTeamMembers = async (teamId:string) => {
 
-    if(!selectedTeam) return
+    const { data } = await supabase
+    .from('team_memberships')
+    .select(`
+      role,
+      user_id,
+      users(
+        id,
+        email,
+        first_name,
+        last_name
+      )
+    `)
+    .eq('team_id',teamId)
+
+    if(data){
+
+      const formatted = data.map((m:any)=>({
+
+        user_id:m.user_id,
+        role:m.role,
+        user:{
+          id:m.users?.id || m.users?.[0]?.id,
+          email:m.users?.email || m.users?.[0]?.email,
+          first_name:m.users?.first_name || m.users?.[0]?.first_name,
+          last_name:m.users?.last_name || m.users?.[0]?.last_name
+        }
+
+      }))
+
+      setTeamMembers(formatted)
+    }
+  }
+
+  const addPlayerToTeam = async (userId:string,role:string) => {
+
+    if(!teamToManage) return
 
     await supabase
     .from('team_memberships')
     .insert({
-      team_id:selectedTeam,
+      team_id:teamToManage.id,
       user_id:userId,
-      role:role
+      role
     })
+
+    loadTeamMembers(teamToManage.id)
   }
 
   if(loading) return <div className="p-6 text-white">Chargement...</div>
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
 
-      <h1 className="text-3xl font-bold text-yellow-400">
-        Dashboard Club Admin
-      </h1>
+  <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
 
-      {/* CLUB SELECT */}
+  <h1 className="text-3xl font-bold text-yellow-400">
+  Dashboard Club Admin
+  </h1>
 
-      <div>
-        <h2 className="text-xl font-bold mb-2">Club</h2>
+{/* CLUB */}
 
-        <select
-        className="bg-gray-800 p-2 rounded"
-        value={selectedClub || ''}
-        onChange={(e)=>loadClubData(e.target.value)}
-        >
-          {clubs.map(c=>(
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
+<select
+className="bg-gray-800 p-2 rounded"
+value={selectedClub || ''}
+onChange={(e)=>loadClubData(e.target.value)}
+>
+{clubs.map(c=>(
+<option key={c.id} value={c.id}>
+{c.name}
+</option>
+))}
+</select>
 
-      {/* TEAMS */}
+{/* TEAMS */}
 
-      <div>
+<div>
 
-        <h2 className="text-xl font-bold text-green-400 mb-2">
-          Équipes
-        </h2>
+<h2 className="text-xl font-bold text-green-400 mb-2">
+Équipes
+</h2>
 
-        <div className="space-y-2">
+{teams.map(team=>(
 
-          {teams.map(team=>(
-            <div
-            key={team.id}
-            className="bg-gray-800 p-3 rounded flex justify-between items-center"
-            >
+<div
+key={team.id}
+className="bg-gray-800 p-3 rounded flex justify-between mb-2"
+>
 
-              <span>{team.name}</span>
+<span>{team.name}</span>
 
-              <button
-              onClick={()=>setSelectedTeam(team.id)}
-              className="bg-yellow-400 text-black px-3 py-1 rounded"
-              >
-                Gérer
-              </button>
+<button
+onClick={()=>{
+setTeamToManage(team)
+loadTeamMembers(team.id)
+setShowManageTeamModal(true)
+}}
+className="bg-yellow-400 text-black px-3 py-1 rounded"
+>
+Gérer
+</button>
 
-            </div>
-          ))}
+</div>
 
-        </div>
+))}
 
-        <div className="mt-3 flex gap-2">
+<button
+onClick={()=>setShowCreateTeamModal(true)}
+className="bg-green-500 px-3 py-2 rounded mt-2"
+>
+Créer équipe
+</button>
 
-          <input
-          value={newTeamName}
-          onChange={(e)=>setNewTeamName(e.target.value)}
-          placeholder="Nom équipe"
-          className="bg-gray-800 p-2 rounded"
-          />
+</div>
 
-          <button
-          onClick={createTeam}
-          className="bg-green-500 px-3 py-2 rounded"
-          >
-            Créer
-          </button>
+{/* MEMBERS */}
 
-        </div>
+<div>
 
-      </div>
+<h2 className="text-xl font-bold text-blue-400 mb-2">
+Membres du club
+</h2>
 
-      {/* MEMBERS */}
+{members.map(m=>{
 
-      <div>
+const name =
+`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
 
-        <h2 className="text-xl font-bold text-blue-400 mb-2">
-          Membres du club
-        </h2>
+return(
 
-        <div className="space-y-2">
+<div
+key={m.user.id}
+className="bg-gray-800 p-2 rounded mb-1"
+>
 
-          {members.map(m=>{
+{name || m.user.email}
 
-            const u = m.users
+</div>
 
-            const name =
-            `${u.first_name || ''} ${u.last_name || ''}`.trim()
+)
 
-            return (
+})}
 
-              <div
-              key={u.id}
-              className="bg-gray-800 p-3 rounded flex justify-between items-center"
-              >
+</div>
 
-                <div>
+{/* MODAL CREATE TEAM */}
 
-                  <div>{name || u.email}</div>
+{showCreateTeamModal && (
 
-                  <div className="text-sm text-gray-400">
-                    {m.role}
-                  </div>
+<div className="fixed inset-0 bg-black/70 flex items-center justify-center">
 
-                </div>
+<div className="bg-gray-800 p-6 rounded w-96 space-y-4">
 
-                {selectedTeam && (
+<h2 className="text-xl font-bold text-yellow-400">
+Créer équipe
+</h2>
 
-                  <div className="flex gap-2">
+<input
+value={newTeamName}
+onChange={(e)=>setNewTeamName(e.target.value)}
+className="bg-gray-700 p-2 rounded w-full"
+placeholder="Nom équipe"
+/>
 
-                    <button
-                    onClick={()=>addPlayerToTeam(u.id,'player')}
-                    className="bg-green-500 px-2 py-1 rounded text-sm"
-                    >
-                      Joueur
-                    </button>
+<div className="flex justify-end gap-2">
 
-                    <button
-                    onClick={()=>addPlayerToTeam(u.id,'captain')}
-                    className="bg-orange-500 px-2 py-1 rounded text-sm"
-                    >
-                      Capitaine
-                    </button>
+<button
+onClick={()=>setShowCreateTeamModal(false)}
+className="bg-gray-600 px-3 py-1 rounded"
+>
+Annuler
+</button>
 
-                  </div>
+<button
+onClick={createTeam}
+className="bg-green-500 px-3 py-1 rounded"
+>
+Créer
+</button>
 
-                )}
+</div>
 
-              </div>
+</div>
 
-            )
-          })}
+</div>
 
-        </div>
+)}
 
-      </div>
+{/* MODAL MANAGE TEAM */}
 
-    </div>
-  )
+{showManageTeamModal && teamToManage && (
+
+<div className="fixed inset-0 bg-black/70 flex items-center justify-center">
+
+<div className="bg-gray-800 p-6 rounded w-[600px] max-h-[80vh] overflow-y-auto">
+
+<h2 className="text-xl font-bold text-yellow-400 mb-4">
+Gestion équipe : {teamToManage.name}
+</h2>
+
+<h3 className="font-bold mb-2">Membres</h3>
+
+{teamMembers.map(m=>{
+
+const name =
+`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
+
+return(
+
+<div
+key={m.user.id}
+className="flex justify-between bg-gray-700 p-2 rounded mb-1"
+>
+
+<span>{name || m.user.email}</span>
+
+<span className="text-yellow-300 text-sm">
+{m.role}
+</span>
+
+</div>
+
+)
+
+})}
+
+<h3 className="font-bold mt-4 mb-2">
+Ajouter joueur
+</h3>
+
+{members.map(m=>{
+
+const name =
+`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
+
+return(
+
+<div
+key={m.user.id}
+className="flex justify-between bg-gray-700 p-2 rounded mb-1"
+>
+
+<span>{name || m.user.email}</span>
+
+<div className="flex gap-2">
+
+<button
+onClick={()=>addPlayerToTeam(m.user.id,'player')}
+className="bg-green-500 px-2 py-1 rounded text-sm"
+>
+Player
+</button>
+
+<button
+onClick={()=>addPlayerToTeam(m.user.id,'captain')}
+className="bg-orange-500 px-2 py-1 rounded text-sm"
+>
+Captain
+</button>
+
+</div>
+
+</div>
+
+)
+
+})}
+
+<button
+onClick={()=>setShowManageTeamModal(false)}
+className="bg-red-500 px-3 py-1 rounded mt-4"
+>
+Fermer
+</button>
+
+</div>
+
+</div>
+
+)}
+
+</div>
+
+)
 }
