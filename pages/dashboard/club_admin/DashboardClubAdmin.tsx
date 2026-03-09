@@ -8,202 +8,143 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// -------------------------------------------
-// Catégories
-const categories: Record<string, string[]> = {
+type Player = {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+}
+
+type Team = {
+  id: string
+  name: string
+  category: string
+  gender: "Homme" | "Dames" | "Mixte"
+  captain_id?: string
+  players: Player[]
+}
+
+type Props = {
+  clubId: string
+}
+
+const CATEGORIES = {
   Homme: ["P50","P100","P200","P300","P400","P500","P700","P1000"],
   Dames: ["WD50","WD100","WD200","WD300","WD400","WD500"],
   Mixte: ["MX50","MX100","MX200","MX300","MX400","MXOPEN"]
 }
 
-// -------------------------------------------
-// Types
-type User = { id: string; first_name: string; last_name: string; email: string }
-type Team = { id: string; name: string; gender: string; players: User[]; captain?: User }
-
-// -------------------------------------------
-// DashboardClubAdmin
-export default function DashboardClubAdmin({ clubId }: { clubId: string }) {
+export default function DashboardClubAdmin({ clubId }: Props) {
   const [teams, setTeams] = useState<Team[]>([])
-  const [clubPlayers, setClubPlayers] = useState<User[]>([])
+  const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
-
-  const [newTeamName, setNewTeamName] = useState("")
-  const [newTeamCategory, setNewTeamCategory] = useState("")
-  const [filterCategory, setFilterCategory] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [searchPlayer, setSearchPlayer] = useState("")
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-
-      // 1️⃣ Récupérer les équipes du club
+      // 1️⃣ Fetch teams du club
       const { data: teamsData } = await supabase
         .from("teams")
-        .select(`id, name, gender, team_memberships(user_id, role, users(first_name, last_name, email))`)
+        .select("id,name,category,gender,captain_id,team_memberships(user_id)")
         .eq("club_id", clubId)
 
-      const teamsMapped: Team[] = (teamsData || []).map((t: any) => {
-        const players: User[] = t.team_memberships
-          .filter((tm: any) => tm.role === "player")
-          .map((tm: any) => tm.users)
-        const captain: User | undefined = t.team_memberships
-          .filter((tm: any) => tm.role === "captain")
-          .map((tm: any) => tm.users)[0]
-        return { id: t.id, name: t.name, gender: t.gender, players, captain }
-      })
-
-      setTeams(teamsMapped)
-
-      // 2️⃣ Récupérer tous les joueurs liés au club
-      const { data: clubUsers } = await supabase
+      // 2️⃣ Fetch joueurs liés au club (Supabase Auth)
+      const { data: playersData } = await supabase
         .from("club_memberships")
-        .select(`user_id, users(first_name, last_name, email)`)
+        .select("user_id, users(email, raw_first_name, raw_last_name)")
         .eq("club_id", clubId)
 
-      setClubPlayers((clubUsers || []).map((u: any) => ({ ...u.users, id: u.user_id })))
+      const mappedPlayers: Player[] = (playersData || []).map((p: any) => ({
+        id: p.user_id,
+        email: p.users.email,
+        first_name: p.users.raw_first_name || p.users.first_name || "",
+        last_name: p.users.raw_last_name || p.users.last_name || ""
+      }))
+
+      setPlayers(mappedPlayers)
+
+      const mappedTeams: Team[] = (teamsData || []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        gender: t.gender,
+        captain_id: t.captain_id,
+        players: t.team_memberships?.map((m: any) => {
+          const p = mappedPlayers.find(pl => pl.id === m.user_id)
+          return p ? p : { id: m.user_id, email: "", first_name: "(capitaine)", last_name: "" }
+        }) || []
+      }))
+
+      setTeams(mappedTeams)
       setLoading(false)
     }
 
     fetchData()
   }, [clubId])
 
+  if (loading) return <div>Chargement du club...</div>
+
   const handleAddTeam = async () => {
-    if (!newTeamName || !newTeamCategory) return
-    const { data: inserted, error } = await supabase
+    const { data, error } = await supabase
       .from("teams")
-      .insert({ name: newTeamName, gender: newTeamCategory, club_id: clubId })
+      .insert({ club_id: clubId, name: "Nouvelle équipe", category: "P50", gender: "Homme" })
       .select()
-      .single()
-
-    if (!error && inserted) {
-      setTeams(prev => [...prev, { ...inserted, players: [] }])
-      setNewTeamName("")
-      setNewTeamCategory("")
-    } else console.error(error)
+    if (!error && data?.length) {
+      setTeams([...teams, { ...data[0], players: [] }])
+    }
   }
-
-  const handleAddPlayer = async (teamId: string, userId: string, role: "player" | "captain") => {
-    const { data: inserted, error } = await supabase
-      .from("team_memberships")
-      .insert({ team_id: teamId, user_id: userId, role })
-      .select()
-      .single()
-
-    if (!error && inserted) {
-      setTeams(prev =>
-        prev.map(t => {
-          if (t.id === teamId) {
-            const user = clubPlayers.find(u => u.id === userId)
-            if (!user) return t
-            if (role === "captain") return { ...t, captain: user }
-            return { ...t, players: [...t.players, user] }
-          }
-          return t
-        })
-      )
-    } else console.error(error)
-  }
-
-  const filteredTeams = filterCategory
-    ? teams.filter(t => t.gender === filterCategory)
-    : teams
-
-  if (loading) return <div>Chargement...</div>
 
   return (
-    <div className="p-6 bg-gray-900 text-white min-h-screen">
-      <h2 className="text-2xl font-bold mb-4">Dashboard Club Admin</h2>
-
-      {/* ---------- Compteurs ---------- */}
-      <div className="flex gap-4 mb-6">
-        <div>Nombre d'équipes : {teams.length}</div>
-        <div>Nombre de joueurs : {clubPlayers.length}</div>
-      </div>
-
-      {/* ---------- Filtre catégorie ---------- */}
-      <select
-        className="p-2 mb-4 bg-gray-800 rounded"
-        value={filterCategory}
-        onChange={e => setFilterCategory(e.target.value)}
-      >
-        <option value="">Toutes catégories</option>
-        {Object.values(categories).flat().map(cat => (
-          <option key={cat} value={cat}>{cat}</option>
-        ))}
-      </select>
-
-      {/* ---------- Formulaire ajout équipe ---------- */}
-      <div className="mb-6 p-4 border border-gray-700 rounded bg-gray-800 flex gap-2">
-        <input
-          type="text"
-          placeholder="Nom de l'équipe"
-          className="p-2 rounded bg-gray-900 flex-1"
-          value={newTeamName}
-          onChange={e => setNewTeamName(e.target.value)}
-        />
-        <select
-          className="p-2 rounded bg-gray-900"
-          value={newTeamCategory}
-          onChange={e => setNewTeamCategory(e.target.value)}
-        >
-          <option value="">Catégorie</option>
-          {Object.entries(categories).map(([gender, list]) =>
-            list.map(cat => <option key={cat} value={cat}>{`(${gender}) ${cat}`}</option>)
-          )}
-        </select>
-        <button className="bg-yellow-400 text-black px-4 rounded font-bold" onClick={handleAddTeam}>
-          Ajouter
+    <div className="p-4 border border-gray-600 rounded space-y-4 bg-gray-800">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold">Club {clubId} - {teams.length} équipes</h2>
+        <button className="bg-yellow-500 px-4 py-2 rounded text-black" onClick={handleAddTeam}>
+          Ajouter une équipe
         </button>
       </div>
 
-      {/* ---------- Liste des équipes ---------- */}
-      {filteredTeams.map(team => (
-        <div key={team.id} className="mb-4 p-4 border border-gray-700 rounded bg-gray-800">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-bold">{team.name} - {team.gender}</h3>
-          </div>
+      {/* Filtre catégorie */}
+      <div className="flex space-x-2">
+        <select className="p-1 rounded" value={categoryFilter || ""} onChange={e => setCategoryFilter(e.target.value || null)}>
+          <option value="">Toutes catégories</option>
+          {Object.values(CATEGORIES).flat().map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          type="text"
+          placeholder="Rechercher joueur..."
+          className="p-1 rounded"
+          value={searchPlayer}
+          onChange={e => setSearchPlayer(e.target.value)}
+        />
+      </div>
 
-          {/* Capitaine */}
-          <div className="mb-2">
-            <strong>Capitaine :</strong> {team.captain ? `${team.captain.first_name} ${team.captain.last_name}` : "(non défini)"}
-          </div>
-
-          {/* Joueurs */}
-          <div className="mb-2">
-            <strong>Joueurs :</strong> {team.players.map(p => `${p.first_name} ${p.last_name}`).join(", ") || "(aucun)"}
-          </div>
-
-          {/* Ajouter joueur / capitaine */}
-          <div className="flex gap-2">
-            <select id={`player-${team.id}`} className="p-2 rounded bg-gray-900 flex-1">
-              <option value="">Sélectionner joueur</option>
-              {clubPlayers.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.first_name} {p.last_name}
-                </option>
-              ))}
-            </select>
-            <button
-              className="bg-green-500 px-3 rounded font-bold"
-              onClick={() => {
-                const sel = (document.getElementById(`player-${team.id}`) as HTMLSelectElement).value
-                if (sel) handleAddPlayer(team.id, sel, "player")
-              }}
-            >
-              Ajouter joueur
-            </button>
-            <button
-              className="bg-blue-500 px-3 rounded font-bold"
-              onClick={() => {
-                const sel = (document.getElementById(`player-${team.id}`) as HTMLSelectElement).value
-                if (sel) handleAddPlayer(team.id, sel, "captain")
-              }}
-            >
-              Définir capitaine
-            </button>
-          </div>
-        </div>
-      ))}
+      <div className="space-y-4">
+        {teams
+          .filter(t => !categoryFilter || t.category === categoryFilter)
+          .map(team => (
+            <div key={team.id} className="border border-gray-700 p-2 rounded bg-gray-900">
+              <div className="flex justify-between items-center">
+                <div>
+                  <strong>{team.name}</strong> ({team.gender}) - Cat: {team.category}
+                </div>
+                <div>
+                  Capitane: {team.players.find(p => p.id === team.captain_id)?.first_name || "(capitaine)"}
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {team.players
+                  .filter(p => !searchPlayer || `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchPlayer.toLowerCase()))
+                  .map(p => (
+                    <span key={p.id} className="bg-gray-700 px-2 py-1 rounded">
+                      {p.first_name} {p.last_name}
+                    </span>
+                  ))}
+              </div>
+            </div>
+          ))}
+      </div>
     </div>
   )
 }
