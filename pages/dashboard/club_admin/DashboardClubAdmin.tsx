@@ -26,50 +26,31 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     const fetchData = async () => {
       setLoading(true)
 
-      // 1️⃣ Récupérer clubs visibles pour l’utilisateur
       const clubsVisible = roles.admin
         ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
         : clubMemberships.map(c => c.club_id)
 
-      // 2️⃣ Récupérer toutes les équipes de ces clubs
-      let teamsData: Team[] = []
-      if (clubsVisible.length > 0) {
-        const { data, error } = await supabase
-          .from("teams")
-          .select("*")
-          .in("club_id", clubsVisible)
-          .order("name", { ascending: true })
-        if (error) console.error(error)
-        teamsData = data || []
-      }
-      setTeams(teamsData)
+      const { data: teamsData } = await supabase
+        .from("teams")
+        .select("*")
+        .in("club_id", clubsVisible)
+        .order("name", { ascending: true })
+      setTeams(teamsData || [])
 
-      // 3️⃣ Récupérer les membres des équipes
-      const teamIds = teamsData.map(t => t.id)
-      let membersData: TeamMember[] = []
-      if (teamIds.length > 0) {
-        const { data, error } = await supabase
-          .from("team_memberships")
-          .select("*")
-          .in("team_id", teamIds)
-        if (error) console.error(error)
-        membersData = data || []
-      }
-      setMembers(membersData)
+      const teamIds = (teamsData || []).map(t => t.id)
+      const { data: membersData } = await supabase
+        .from("team_memberships")
+        .select("*")
+        .in("team_id", teamIds)
+      setMembers(membersData || [])
 
-      // 4️⃣ Récupérer tous les utilisateurs liés aux clubs (avec mapping sur users)
-      let clubUsersData: any[] = []
-      if (clubsVisible.length > 0) {
-        const { data, error } = await supabase
-          .from("club_memberships")
-          .select("user_id, users(first_name, last_name, email)")
-          .in("club_id", clubsVisible)
-        if (error) console.error(error)
-        clubUsersData = data || []
-      }
+      const { data: clubUsersData } = await supabase
+        .from("club_memberships")
+        .select("user_id, users(first_name, last_name, email)")
+        .in("club_id", clubsVisible)
 
       const usersMap: Record<string, ClubUser> = {}
-      clubUsersData.forEach(m => {
+      (clubUsersData || []).forEach((m: any) => {
         if (m.users && !usersMap[m.user_id]) {
           usersMap[m.user_id] = {
             id: m.user_id,
@@ -125,14 +106,11 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                 ))}
               </div>
 
-              {/* Ajouter joueur */}
               {(roles.admin || roles.club_admin) && (
-                <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
-              )}
-
-              {/* Affecter capitaine */}
-              {(roles.admin || roles.club_admin) && (
-                <AssignCaptainForm team={team} members={members} setMembers={setMembers} />
+                <>
+                  <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
+                  <AssignCaptainForm team={team} members={members} setMembers={setMembers} users={users} />
+                </>
               )}
             </div>
           )
@@ -180,17 +158,16 @@ function AddPlayerForm({
 function AssignCaptainForm({
   team,
   members,
-  setMembers
+  setMembers,
+  users
 }: {
   team: Team
   members: TeamMember[]
   setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  users: ClubUser[]
 }) {
   const [selectedCaptainId, setSelectedCaptainId] = useState("")
   const currentCaptain = members.find(m => m.team_id === team.id && m.role === "captain")
-  const teamUsers = members
-    .filter(m => m.team_id === team.id)
-    .map(m => ({ ...m, user: m.user_id }))
 
   const handleAssign = async () => {
     if (!selectedCaptainId) return
@@ -218,8 +195,8 @@ function AssignCaptainForm({
       <select className="bg-gray-700 text-white p-1 rounded" value={selectedCaptainId} onChange={e => setSelectedCaptainId(e.target.value)}>
         <option value="">Sélectionner capitaine</option>
         {members.filter(m => m.team_id === team.id).map(m => {
-          const user = m.user_id ? m.user_id : "(Joueur non trouvé)"
-          const displayName = user ? `${users.find(u => u.id === m.user_id)?.first_name || ""} ${users.find(u => u.id === m.user_id)?.last_name || ""}` : "(Joueur non trouvé)"
+          const user = users.find(u => u.id === m.user_id)
+          const displayName = user ? `${user.first_name} ${user.last_name}` : "(Joueur non trouvé)"
           return <option key={m.user_id} value={m.user_id}>{displayName}</option>
         })}
       </select>
