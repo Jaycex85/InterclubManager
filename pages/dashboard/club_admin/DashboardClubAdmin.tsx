@@ -8,9 +8,12 @@ const supabase = createClient(
  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function DashboardClubAdmin() {
+export default function DashboardClubAdmin(){
 
- const [clubId,setClubId] = useState<string | null>(null)
+ const [userRole,setUserRole] = useState<string | null>(null)
+
+ const [clubs,setClubs] = useState<any[]>([])
+ const [selectedClub,setSelectedClub] = useState<string | null>(null)
 
  const [teams,setTeams] = useState<any[]>([])
  const [players,setPlayers] = useState<any[]>([])
@@ -19,62 +22,103 @@ export default function DashboardClubAdmin() {
 
  useEffect(()=>{
 
-  loadData()
+  init()
 
  },[])
 
- const loadData = async()=>{
+ async function init(){
 
   const { data:{session} } = await supabase.auth.getSession()
 
   const { data:user } = await supabase
    .from("users")
-   .select("id")
+   .select("id,role")
    .eq("auth_id",session?.user.id)
    .single()
 
-  const { data:club } = await supabase
-   .from("club_memberships")
-   .select("club_id")
-   .eq("user_id",user.id)
-   .limit(1)
-   .single()
+  setUserRole(user.role)
 
-  setClubId(club.club_id)
+  let clubsData:any[] = []
+
+  // ADMIN GLOBAL
+
+  if(user.role === "admin"){
+
+   const { data } = await supabase
+    .from("clubs")
+    .select("id,name")
+
+   clubsData = data || []
+
+  }
+
+  // CLUB ADMIN
+
+  else{
+
+   const { data } = await supabase
+    .from("club_memberships")
+    .select("club_id,clubs(name)")
+    .eq("user_id",user.id)
+
+   clubsData = (data || []).map((c:any)=>({
+    id:c.club_id,
+    name:c.clubs.name
+   }))
+
+  }
+
+  setClubs(clubsData)
+
+  if(clubsData.length > 0){
+
+   setSelectedClub(clubsData[0].id)
+   loadClubData(clubsData[0].id)
+
+  }
+
+ }
+
+ async function loadClubData(clubId:string){
+
+  // TEAMS
 
   const { data:teamsData } = await supabase
    .from("teams")
    .select("*")
-   .eq("club_id",club.club_id)
+   .eq("club_id",clubId)
 
   setTeams(teamsData || [])
 
+  // PLAYERS
+
   const { data:playersData } = await supabase
    .from("club_memberships")
-   .select("user_id, users(name,email)")
-   .eq("club_id",club.club_id)
+   .select("user_id,role,users(name,email)")
+   .eq("club_id",clubId)
 
   setPlayers(playersData || [])
 
  }
 
- const createTeam = async()=>{
+ async function createTeam(){
 
-  if(!newTeam) return
+  if(!newTeam || !selectedClub) return
 
   await supabase
    .from("teams")
    .insert({
     name:newTeam,
-    club_id:clubId
+    club_id:selectedClub
    })
 
   setNewTeam("")
-  loadData()
+
+  loadClubData(selectedClub)
 
  }
 
- const addPlayerToTeam = async(userId:string,teamId:string)=>{
+ async function addPlayerToTeam(userId:string,teamId:string){
 
   await supabase
    .from("team_memberships")
@@ -88,7 +132,7 @@ export default function DashboardClubAdmin() {
 
  }
 
- const promoteCaptain = async(userId:string,teamId:string)=>{
+ async function promoteCaptain(userId:string,teamId:string){
 
   await supabase
    .from("team_memberships")
@@ -104,9 +148,40 @@ export default function DashboardClubAdmin() {
 
   <div className="space-y-8">
 
-   <h2 className="text-xl font-bold text-yellow-400">
-    Gestion du Club
+   <h2 className="text-2xl font-bold text-yellow-400">
+    Gestion des Clubs
    </h2>
+
+   {/* SELECT CLUB */}
+
+   {clubs.length > 1 && (
+
+    <div className="bg-gray-800 p-4 rounded">
+
+     <label className="block mb-2 font-bold">
+      Choisir un club
+     </label>
+
+     <select
+      value={selectedClub || ""}
+      onChange={(e)=>{
+       setSelectedClub(e.target.value)
+       loadClubData(e.target.value)
+      }}
+      className="text-black p-2 rounded w-full"
+     >
+
+      {clubs.map(c=>(
+       <option key={c.id} value={c.id}>
+        {c.name}
+       </option>
+      ))}
+
+     </select>
+
+    </div>
+
+   )}
 
    {/* CREATE TEAM */}
 
@@ -119,10 +194,10 @@ export default function DashboardClubAdmin() {
     <div className="flex gap-2">
 
      <input
-      className="text-black p-2 rounded w-full"
       value={newTeam}
       onChange={(e)=>setNewTeam(e.target.value)}
-      placeholder="Nom équipe"
+      placeholder="Nom de l'équipe"
+      className="text-black p-2 rounded w-full"
      />
 
      <button
@@ -144,53 +219,73 @@ export default function DashboardClubAdmin() {
      Équipes du club
     </h3>
 
+    {teams.length === 0 && (
+     <div>Aucune équipe</div>
+    )}
+
     {teams.map(team=>(
      <div key={team.id} className="mb-6">
 
-      <div className="font-bold text-yellow-300">
+      <div className="text-yellow-300 font-bold mb-2">
        {team.name}
       </div>
 
-      <div className="mt-2 space-y-1">
+      {players.map((p:any)=>(
+       <div
+        key={p.user_id}
+        className="flex justify-between bg-gray-700 p-2 rounded mb-1"
+       >
 
-       {players.map((p:any)=>(
-        <div
-         key={p.user_id}
-         className="flex justify-between bg-gray-700 p-2 rounded"
-        >
+        <span>
+         {p.users?.name || p.users?.email}
+        </span>
 
-         <span>
-          {p.users?.name || p.users?.email}
-         </span>
+        <div className="flex gap-2">
 
-         <div className="flex gap-2">
+         <button
+          onClick={()=>addPlayerToTeam(p.user_id,team.id)}
+          className="bg-green-500 text-black px-2 rounded"
+         >
+          Ajouter
+         </button>
 
-          <button
-           onClick={()=>addPlayerToTeam(p.user_id,team.id)}
-           className="bg-green-500 text-black px-2 rounded"
-          >
-           Ajouter
-          </button>
-
-          <button
-           onClick={()=>promoteCaptain(p.user_id,team.id)}
-           className="bg-blue-500 text-black px-2 rounded"
-          >
-           Capitaine
-          </button>
-
-         </div>
+         <button
+          onClick={()=>promoteCaptain(p.user_id,team.id)}
+          className="bg-blue-500 text-black px-2 rounded"
+         >
+          Capitaine
+         </button>
 
         </div>
-       ))}
 
-      </div>
+       </div>
+      ))}
 
      </div>
     ))}
 
    </div>
 
+   {/* PLAYERS */}
+
+   <div className="bg-gray-800 p-4 rounded">
+
+    <h3 className="font-bold mb-4">
+     Joueurs du club
+    </h3>
+
+    {players.map((p:any)=>(
+     <div
+      key={p.user_id}
+      className="bg-gray-700 p-2 rounded mb-1"
+     >
+      {p.users?.name || p.users?.email}
+     </div>
+    ))}
+
+   </div>
+
   </div>
+
  )
 }
