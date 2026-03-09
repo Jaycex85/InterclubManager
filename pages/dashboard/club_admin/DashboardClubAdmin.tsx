@@ -75,7 +75,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
       setMembers(membersData || [])
 
       // 3️⃣ Récupérer les infos des joueurs (users) liés au club
-      const clubUserIds = [...new Set((membersData || []).map(m => m.user_id))]
+      const clubUserIds: string[] = [] ;(membersData || []).forEach(m => {   if (!clubUserIds.includes(m.user_id)) clubUserIds.push(m.user_id) })
       const { data: usersData } = await supabase
         .from("users")
         .select("id, auth_id")
