@@ -12,6 +12,7 @@ type Club = {
 export default function ClubsDashboard() {
   const [clubs, setClubs] = useState<Club[]>([])
   const [openClubId, setOpenClubId] = useState<string | null>(null)
+  const [addingClub, setAddingClub] = useState(false)
   const containerRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   const fetchClubs = async () => {
@@ -23,11 +24,10 @@ export default function ClubsDashboard() {
     fetchClubs()
   }, [])
 
-  // Recalcule la hauteur après chaque ouverture
+  // Animation ouverture club
   useEffect(() => {
     if (openClubId && containerRefs.current[openClubId]) {
       const el = containerRefs.current[openClubId]!
-      // Timeout pour attendre le rendu du contenu enfant
       setTimeout(() => {
         el.style.maxHeight = el.scrollHeight + 'px'
       }, 0)
@@ -38,6 +38,17 @@ export default function ClubsDashboard() {
     <div className="p-6 bg-gray-900 min-h-screen">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Clubs</h1>
 
+      {/* Bouton Ajouter */}
+      <div className="mb-6">
+        <button
+          onClick={() => setAddingClub(true)}
+          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-bold"
+        >
+          + Ajouter un club
+        </button>
+      </div>
+
+      {/* Liste des clubs */}
       <div className="space-y-4">
         {clubs.map(club => (
           <div key={club.id} className="border border-gray-700 rounded overflow-hidden">
@@ -72,6 +83,20 @@ export default function ClubsDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Modal Ajouter un club */}
+      {addingClub && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <EditClub
+            clubId="new"
+            onClose={() => setAddingClub(false)}
+            onSaved={() => {
+              fetchClubs()
+              setAddingClub(false)
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }
