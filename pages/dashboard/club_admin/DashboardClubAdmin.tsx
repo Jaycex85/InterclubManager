@@ -47,23 +47,27 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         .in("team_id", teamIds)
       setMembers(membersData || [])
 
-      // 4️⃣ Récupérer tous les utilisateurs liés aux clubs
-      const { data: clubUsersData } = await supabase
-        .from("club_memberships")
-        .select("user_id, users(first_name, last_name, email)")
-        .in("club_id", clubIds)
+// 4️⃣ Récupérer tous les utilisateurs liés aux clubs
+const { data: clubUsersData } = await supabase
+  .from("club_memberships")
+  .select("user_id, users(first_name, last_name, email)")
+  .in("club_id", clubIds)
 
-      const usersMap: Record<string, ClubUser> = {}
-      (clubUsersData || []).forEach((m: any) => {
-        if (m.users && !usersMap[m.user_id]) {
-          usersMap[m.user_id] = {
-            id: m.user_id,
-            first_name: m.users.first_name,
-            last_name: m.users.last_name,
-            email: m.users.email
-          }
-        }
-      })
+// Correction TS : type explicite avec as Record<...>
+const usersMap = {} as Record<string, ClubUser>
+
+(clubUsersData || []).forEach((m: any) => {
+  if (m.users && !usersMap[m.user_id]) {
+    usersMap[m.user_id] = {
+      id: m.user_id,
+      first_name: m.users.first_name,
+      last_name: m.users.last_name,
+      email: m.users.email
+    }
+  }
+})
+
+setUsers(Object.values(usersMap))
       setUsers(Object.values(usersMap))
       setLoading(false)
     }
