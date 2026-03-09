@@ -82,7 +82,6 @@ export default function AdminDashboard() {
       icon: <MdSportsTennis className="inline mr-2" />,
       color: 'bg-blue-700 hover:bg-blue-600',
       items: teams.map(t => {
-        // Evite doublon si club a même nom
         const clubPart = t.club_name && t.club_name !== t.name ? ` - ${t.club_name}` : ''
         const categoryPart = t.category ? ` - ${t.category}` : ''
         return { id: t.id, title: `${t.name}${clubPart}${categoryPart}` }
@@ -112,11 +111,24 @@ export default function AdminDashboard() {
             {/* Panel header */}
             <button
               className="w-full text-left p-4 flex items-center justify-between font-bold"
-              style={{ backgroundColor: panel.key === 'clubs' ? '#166534' : panel.key === 'teams' ? '#1e40af' : '#f59e0b' }}
+              style={{
+                backgroundColor:
+                  panel.key === 'clubs'
+                    ? '#166534'
+                    : panel.key === 'teams'
+                    ? '#1e40af'
+                    : '#f59e0b',
+              }}
               onClick={() => setOpenPanel(openPanel === panel.key ? null : panel.key)}
             >
-              <span className="flex items-center">{panel.icon} {panel.label}</span>
-              <span className={`ml-2 transform transition-transform duration-300 ${openPanel === panel.key ? 'rotate-180' : ''}`}>
+              <span className="flex items-center">
+                {panel.icon} {panel.label}
+              </span>
+              <span
+                className={`ml-2 transform transition-transform duration-300 ${
+                  openPanel === panel.key ? 'rotate-180' : ''
+                }`}
+              >
                 ▼
               </span>
             </button>
@@ -124,6 +136,17 @@ export default function AdminDashboard() {
             {/* Panel items */}
             {openPanel === panel.key && (
               <div className="p-4 grid gap-2">
+                {/* Bouton Ajouter un club */}
+                {panel.key === 'clubs' && (
+                  <button
+                    className="w-full text-left p-2 rounded bg-green-600 hover:bg-green-700 text-white font-bold transition-colors"
+                    onClick={() => setOpenModal({ type: 'clubs', id: 'new' })}
+                  >
+                    + Ajouter un club
+                  </button>
+                )}
+
+                {/* Items existants */}
                 {panel.items.map(item => (
                   <button
                     key={item.id}
@@ -153,21 +176,30 @@ export default function AdminDashboard() {
             {openModal.type === 'clubs' && (
               <ClubForm
                 clubId={openModal.id}
-                onSaved={() => { fetchClubs(); setOpenModal(null) }}
+                onSaved={() => {
+                  fetchClubs()
+                  setOpenModal(null)
+                }}
                 onClose={() => setOpenModal(null)}
               />
             )}
             {openModal.type === 'teams' && (
               <TeamForm
                 teamId={openModal.id}
-                onSaved={() => { fetchTeams(); setOpenModal(null) }}
+                onSaved={() => {
+                  fetchTeams()
+                  setOpenModal(null)
+                }}
                 onClose={() => setOpenModal(null)}
               />
             )}
             {openModal.type === 'users' && (
               <EditUser
                 userId={openModal.id}
-                onSaved={() => { fetchUsers(); setOpenModal(null) }}
+                onSaved={() => {
+                  fetchUsers()
+                  setOpenModal(null)
+                }}
                 onClose={() => setOpenModal(null)}
               />
             )}
@@ -178,8 +210,14 @@ export default function AdminDashboard() {
       {/* Animation keyframes Tailwind */}
       <style jsx>{`
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease-out;
