@@ -1,431 +1,196 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../../utils/supabaseClient'
+import { useEffect, useState } from "react"
+import { createClient } from "@supabase/supabase-js"
 
-type Club = {
-  id: string
-  name: string
-}
-
-type Team = {
-  id: string
-  name: string
-  club_id: string
-}
-
-type User = {
-  id: string
-  email: string
-  first_name?: string
-  last_name?: string
-}
-
-type Membership = {
-  user_id: string
-  role: string
-  user: User
-}
+const supabase = createClient(
+ process.env.NEXT_PUBLIC_SUPABASE_URL!,
+ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function DashboardClubAdmin() {
 
-  const [clubs,setClubs] = useState<Club[]>([])
-  const [selectedClub,setSelectedClub] = useState<string | null>(null)
+ const [clubId,setClubId] = useState<string | null>(null)
 
-  const [teams,setTeams] = useState<Team[]>([])
-  const [members,setMembers] = useState<Membership[]>([])
+ const [teams,setTeams] = useState<any[]>([])
+ const [players,setPlayers] = useState<any[]>([])
 
-  const [loading,setLoading] = useState(true)
+ const [newTeam,setNewTeam] = useState("")
 
-  const [showCreateTeamModal,setShowCreateTeamModal] = useState(false)
-  const [showManageTeamModal,setShowManageTeamModal] = useState(false)
+ useEffect(()=>{
 
-  const [newTeamName,setNewTeamName] = useState('')
+  loadData()
 
-  const [teamToManage,setTeamToManage] = useState<Team | null>(null)
-  const [teamMembers,setTeamMembers] = useState<Membership[]>([])
+ },[])
 
-  useEffect(()=>{
-    loadClubs()
-  },[])
+ const loadData = async()=>{
 
-  const loadClubs = async () => {
+  const { data:{session} } = await supabase.auth.getSession()
 
-    const { data:{user} } = await supabase.auth.getUser()
+  const { data:user } = await supabase
+   .from("users")
+   .select("id")
+   .eq("auth_id",session?.user.id)
+   .single()
 
-    if(!user) return
+  const { data:club } = await supabase
+   .from("club_memberships")
+   .select("club_id")
+   .eq("user_id",user.id)
+   .limit(1)
+   .single()
 
-    const { data } = await supabase
-    .from('club_memberships')
-    .select(`
-      role,
-      clubs(
-        id,
-        name
-      )
-    `)
-    .eq('user_id',user.id)
+  setClubId(club.club_id)
 
-    if(data){
+  const { data:teamsData } = await supabase
+   .from("teams")
+   .select("*")
+   .eq("club_id",club.club_id)
 
-      const allowed = data
-      .filter((m:any)=> m.role === 'club_admin' || m.role === 'admin')
-      .map((m:any)=> m.clubs)
-
-      setClubs(allowed)
+  setTeams(teamsData || [])
 
-      if(allowed.length){
-        setSelectedClub(allowed[0].id)
-        loadClubData(allowed[0].id)
-      }
-    }
+  const { data:playersData } = await supabase
+   .from("club_memberships")
+   .select("user_id, users(name,email)")
+   .eq("club_id",club.club_id)
 
-    setLoading(false)
-  }
+  setPlayers(playersData || [])
 
-  const loadClubData = async (clubId:string) => {
+ }
 
-    setSelectedClub(clubId)
+ const createTeam = async()=>{
 
-    const { data:teamsData } = await supabase
-    .from('teams')
-    .select('*')
-    .eq('club_id',clubId)
+  if(!newTeam) return
 
-    if(teamsData) setTeams(teamsData)
+  await supabase
+   .from("teams")
+   .insert({
+    name:newTeam,
+    club_id:clubId
+   })
 
-    const { data:membersData } = await supabase
-    .from('club_memberships')
-    .select(`
-      role,
-      user_id,
-      users(
-        id,
-        email,
-        first_name,
-        last_name
-      )
-    `)
-    .eq('club_id',clubId)
+  setNewTeam("")
+  loadData()
 
-    if(membersData){
+ }
 
-      const formatted:Membership[] = membersData.map((m:any)=>({
+ const addPlayerToTeam = async(userId:string,teamId:string)=>{
 
-        user_id:m.user_id,
-        role:m.role,
-        user:{
-          id:m.users?.id || m.users?.[0]?.id,
-          email:m.users?.email || m.users?.[0]?.email,
-          first_name:m.users?.first_name || m.users?.[0]?.first_name,
-          last_name:m.users?.last_name || m.users?.[0]?.last_name
-        }
+  await supabase
+   .from("team_memberships")
+   .insert({
+    user_id:userId,
+    team_id:teamId,
+    role:"player"
+   })
 
-      }))
+  alert("Joueur ajouté")
 
-      setMembers(formatted)
-    }
-  }
+ }
 
-  const createTeam = async () => {
+ const promoteCaptain = async(userId:string,teamId:string)=>{
 
-    if(!selectedClub || !newTeamName) return
-
-    await supabase
-    .from('teams')
-    .insert({
-      name:newTeamName,
-      club_id:selectedClub
-    })
+  await supabase
+   .from("team_memberships")
+   .update({ role:"captain" })
+   .eq("user_id",userId)
+   .eq("team_id",teamId)
 
-    setNewTeamName('')
-    setShowCreateTeamModal(false)
-
-    loadClubData(selectedClub)
-  }
-
-  const loadTeamMembers = async (teamId:string) => {
-
-    const { data } = await supabase
-    .from('team_memberships')
-    .select(`
-      role,
-      user_id,
-      users(
-        id,
-        email,
-        first_name,
-        last_name
-      )
-    `)
-    .eq('team_id',teamId)
-
-    if(data){
+  alert("Capitaine défini")
 
-      const formatted = data.map((m:any)=>({
+ }
 
-        user_id:m.user_id,
-        role:m.role,
-        user:{
-          id:m.users?.id || m.users?.[0]?.id,
-          email:m.users?.email || m.users?.[0]?.email,
-          first_name:m.users?.first_name || m.users?.[0]?.first_name,
-          last_name:m.users?.last_name || m.users?.[0]?.last_name
-        }
+ return(
 
-      }))
+  <div className="space-y-8">
 
-      setTeamMembers(formatted)
-    }
-  }
+   <h2 className="text-xl font-bold text-yellow-400">
+    Gestion du Club
+   </h2>
 
-  const addPlayerToTeam = async (userId:string,role:string) => {
+   {/* CREATE TEAM */}
 
-    if(!teamToManage) return
+   <div className="bg-gray-800 p-4 rounded">
 
-    await supabase
-    .from('team_memberships')
-    .insert({
-      team_id:teamToManage.id,
-      user_id:userId,
-      role
-    })
+    <h3 className="font-bold mb-2">
+     Créer une équipe
+    </h3>
 
-    loadTeamMembers(teamToManage.id)
-  }
+    <div className="flex gap-2">
 
-  if(loading) return <div className="p-6 text-white">Chargement...</div>
+     <input
+      className="text-black p-2 rounded w-full"
+      value={newTeam}
+      onChange={(e)=>setNewTeam(e.target.value)}
+      placeholder="Nom équipe"
+     />
 
-  return (
+     <button
+      onClick={createTeam}
+      className="bg-yellow-500 text-black px-4 rounded"
+     >
+      Créer
+     </button>
 
-  <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
+    </div>
 
-  <h1 className="text-3xl font-bold text-yellow-400">
-  Dashboard Club Admin
-  </h1>
+   </div>
 
-{/* CLUB */}
+   {/* TEAMS */}
 
-<select
-className="bg-gray-800 p-2 rounded"
-value={selectedClub || ''}
-onChange={(e)=>loadClubData(e.target.value)}
->
-{clubs.map(c=>(
-<option key={c.id} value={c.id}>
-{c.name}
-</option>
-))}
-</select>
+   <div className="bg-gray-800 p-4 rounded">
 
-{/* TEAMS */}
+    <h3 className="font-bold mb-4">
+     Équipes du club
+    </h3>
 
-<div>
+    {teams.map(team=>(
+     <div key={team.id} className="mb-6">
 
-<h2 className="text-xl font-bold text-green-400 mb-2">
-Équipes
-</h2>
+      <div className="font-bold text-yellow-300">
+       {team.name}
+      </div>
 
-{teams.map(team=>(
+      <div className="mt-2 space-y-1">
 
-<div
-key={team.id}
-className="bg-gray-800 p-3 rounded flex justify-between mb-2"
->
+       {players.map((p:any)=>(
+        <div
+         key={p.user_id}
+         className="flex justify-between bg-gray-700 p-2 rounded"
+        >
 
-<span>{team.name}</span>
+         <span>
+          {p.users?.name || p.users?.email}
+         </span>
 
-<button
-onClick={()=>{
-setTeamToManage(team)
-loadTeamMembers(team.id)
-setShowManageTeamModal(true)
-}}
-className="bg-yellow-400 text-black px-3 py-1 rounded"
->
-Gérer
-</button>
+         <div className="flex gap-2">
 
-</div>
+          <button
+           onClick={()=>addPlayerToTeam(p.user_id,team.id)}
+           className="bg-green-500 text-black px-2 rounded"
+          >
+           Ajouter
+          </button>
 
-))}
+          <button
+           onClick={()=>promoteCaptain(p.user_id,team.id)}
+           className="bg-blue-500 text-black px-2 rounded"
+          >
+           Capitaine
+          </button>
 
-<button
-onClick={()=>setShowCreateTeamModal(true)}
-className="bg-green-500 px-3 py-2 rounded mt-2"
->
-Créer équipe
-</button>
+         </div>
 
-</div>
+        </div>
+       ))}
 
-{/* MEMBERS */}
+      </div>
 
-<div>
+     </div>
+    ))}
 
-<h2 className="text-xl font-bold text-blue-400 mb-2">
-Membres du club
-</h2>
+   </div>
 
-{members.map(m=>{
-
-const name =
-`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
-
-return(
-
-<div
-key={m.user.id}
-className="bg-gray-800 p-2 rounded mb-1"
->
-
-{name || m.user.email}
-
-</div>
-
-)
-
-})}
-
-</div>
-
-{/* MODAL CREATE TEAM */}
-
-{showCreateTeamModal && (
-
-<div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-
-<div className="bg-gray-800 p-6 rounded w-96 space-y-4">
-
-<h2 className="text-xl font-bold text-yellow-400">
-Créer équipe
-</h2>
-
-<input
-value={newTeamName}
-onChange={(e)=>setNewTeamName(e.target.value)}
-className="bg-gray-700 p-2 rounded w-full"
-placeholder="Nom équipe"
-/>
-
-<div className="flex justify-end gap-2">
-
-<button
-onClick={()=>setShowCreateTeamModal(false)}
-className="bg-gray-600 px-3 py-1 rounded"
->
-Annuler
-</button>
-
-<button
-onClick={createTeam}
-className="bg-green-500 px-3 py-1 rounded"
->
-Créer
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-)}
-
-{/* MODAL MANAGE TEAM */}
-
-{showManageTeamModal && teamToManage && (
-
-<div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-
-<div className="bg-gray-800 p-6 rounded w-[600px] max-h-[80vh] overflow-y-auto">
-
-<h2 className="text-xl font-bold text-yellow-400 mb-4">
-Gestion équipe : {teamToManage.name}
-</h2>
-
-<h3 className="font-bold mb-2">Membres</h3>
-
-{teamMembers.map(m=>{
-
-const name =
-`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
-
-return(
-
-<div
-key={m.user.id}
-className="flex justify-between bg-gray-700 p-2 rounded mb-1"
->
-
-<span>{name || m.user.email}</span>
-
-<span className="text-yellow-300 text-sm">
-{m.role}
-</span>
-
-</div>
-
-)
-
-})}
-
-<h3 className="font-bold mt-4 mb-2">
-Ajouter joueur
-</h3>
-
-{members.map(m=>{
-
-const name =
-`${m.user.first_name || ''} ${m.user.last_name || ''}`.trim()
-
-return(
-
-<div
-key={m.user.id}
-className="flex justify-between bg-gray-700 p-2 rounded mb-1"
->
-
-<span>{name || m.user.email}</span>
-
-<div className="flex gap-2">
-
-<button
-onClick={()=>addPlayerToTeam(m.user.id,'player')}
-className="bg-green-500 px-2 py-1 rounded text-sm"
->
-Player
-</button>
-
-<button
-onClick={()=>addPlayerToTeam(m.user.id,'captain')}
-className="bg-orange-500 px-2 py-1 rounded text-sm"
->
-Captain
-</button>
-
-</div>
-
-</div>
-
-)
-
-})}
-
-<button
-onClick={()=>setShowManageTeamModal(false)}
-className="bg-red-500 px-3 py-1 rounded mt-4"
->
-Fermer
-</button>
-
-</div>
-
-</div>
-
-)}
-
-</div>
-
-)
+  </div>
+ )
 }
