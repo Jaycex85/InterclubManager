@@ -47,27 +47,35 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         .in("team_id", teamIds)
       setMembers(membersData || [])
 
-// 4️⃣ Récupérer tous les utilisateurs liés aux clubs
-const { data: clubUsersData } = await supabase
-  .from("club_memberships")
-  .select("user_id, users(first_name, last_name, email)")
-  .in("club_id", clubIds)
+      // 4️⃣ Récupérer tous les utilisateurs nécessaires (pour admin global ou club_admin)
+      const userIdsSet = new Set<string>()
+      ;(membersData || []).forEach(m => userIdsSet.add(m.user_id))
+      const userIds = Array.from(userIdsSet)
 
-// Correction TS : type explicite avec as Record<...>
-const usersMap = {} as Record<string, ClubUser>
+      const { data: usersData } = await supabase
+        .from("users")
+        .select("id, auth_id")
+        .in("id", userIds)
 
-(clubUsersData || []).forEach((m: any) => {
-  if (m.users && !usersMap[m.user_id]) {
-    usersMap[m.user_id] = {
-      id: m.user_id,
-      first_name: m.users.first_name,
-      last_name: m.users.last_name,
-      email: m.users.email
-    }
-  }
-})
+      const authIds = (usersData || []).map(u => u.auth_id)
+      const { data: authData } = await supabase
+        .from("auth.users")
+        .select("id, email, user_metadata")
+        .in("id", authIds)
 
-setUsers(Object.values(usersMap))
+      const usersMap: Record<string, ClubUser> = {}
+      (usersData || []).forEach(u => {
+        const authUser = (authData || []).find(a => a.id === u.auth_id)
+        if (authUser) {
+          usersMap[u.id] = {
+            id: u.id,
+            first_name: authUser.user_metadata?.first_name || "",
+            last_name: authUser.user_metadata?.last_name || "",
+            email: authUser.email
+          }
+        }
+      })
+
       setUsers(Object.values(usersMap))
       setLoading(false)
     }
@@ -96,7 +104,9 @@ setUsers(Object.values(usersMap))
               <div className="mt-2 space-y-1">
                 {teamMembers.map(tm => (
                   <div key={tm.user_id} className="flex justify-between items-center">
-                    <span>{tm.user ? `${tm.user.first_name} ${tm.user.last_name}` : "(Joueur non trouvé)"} - {tm.role}</span>
+                    <span>
+                      {tm.user ? `${tm.user.first_name} ${tm.user.last_name}` : "(Joueur non trouvé)"} - {tm.role}
+                    </span>
                     {(roles.admin || roles.club_admin) && (
                       <button
                         className="text-red-400 hover:text-red-600"
@@ -121,7 +131,7 @@ setUsers(Object.values(usersMap))
 
               {/* ⚡ Affecter capitaine */}
               {(roles.admin || roles.club_admin) && (
-                <AssignCaptainForm team={team} members={members} setMembers={setMembers} />
+                <AssignCaptainForm team={team} members={members} setMembers={setMembers} users={users} />
               )}
             </div>
           )
@@ -156,7 +166,7 @@ function AddPlayerForm({ team, members, setMembers, users }: { team: Team; membe
 }
 
 // ---------------------- Affectation capitaine ----------------------
-function AssignCaptainForm({ team, members, setMembers }: { team: Team; members: TeamMember[]; setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>> }) {
+function AssignCaptainForm({ team, members, setMembers, users }: { team: Team; members: TeamMember[]; setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>; users: ClubUser[] }) {
   const [selectedCaptainId, setSelectedCaptainId] = useState<string>("")
   const currentCaptain = members.find(m => m.team_id === team.id && m.role === "captain")
 
@@ -185,9 +195,10 @@ function AssignCaptainForm({ team, members, setMembers }: { team: Team; members:
     <div className="mt-2 flex gap-2">
       <select className="bg-gray-700 text-white p-1 rounded" value={selectedCaptainId} onChange={e => setSelectedCaptainId(e.target.value)}>
         <option value="">Sélectionner capitaine</option>
-        {members.filter(m => m.team_id === team.id).map(m => (
-          <option key={m.user_id} value={m.user_id}>{m.user_id}</option>
-        ))}
+        {members.filter(m => m.team_id === team.id).map(m => {
+          const user = users.find(u => u.id === m.user_id)
+          return <option key={m.user_id} value={m.user_id}>{user ? `${user.first_name} ${user.last_name}` : m.user_id}</option>
+        })}
       </select>
       <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>Assigner</button>
     </div>
