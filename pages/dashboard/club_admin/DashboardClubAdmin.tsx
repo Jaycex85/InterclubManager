@@ -49,8 +49,10 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         .select("user_id, users(first_name, last_name, email)")
         .in("club_id", clubsVisible)
 
+      // ⚡ Fix build TS error ici
       const usersMap: Record<string, ClubUser> = {}
-      (clubUsersData || []).forEach((m: any) => {
+      const clubUsersArray: any[] = clubUsersData || []
+      clubUsersArray.forEach(m => {
         if (m.users && !usersMap[m.user_id]) {
           usersMap[m.user_id] = {
             id: m.user_id,
@@ -84,7 +86,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                 {team.name} ({team.gender}) - {team.category}
               </h2>
 
-              {/* Joueurs */}
               <div className="mt-2 space-y-1">
                 {teamMembers.map(tm => (
                   <div key={tm.user_id} className="flex justify-between items-center">
@@ -119,17 +120,9 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ---------------------- Ajouter joueur ----------------------
-function AddPlayerForm({
-  team,
-  members,
-  setMembers,
-  users
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  users: ClubUser[]
+// ---- Ajouter joueur ----
+function AddPlayerForm({ team, members, setMembers, users }: {
+  team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, users: ClubUser[]
 }) {
   const availableUsers = users.filter(u => !members.some(m => m.user_id === u.id))
   const [selectedUserId, setSelectedUserId] = useState("")
@@ -145,26 +138,16 @@ function AddPlayerForm({
     <div className="mt-2 flex gap-2">
       <select className="bg-gray-700 text-white p-1 rounded" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
         <option value="">Sélectionner un joueur</option>
-        {availableUsers.map(u => (
-          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-        ))}
+        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>)}
       </select>
       <button className="bg-green-600 hover:bg-green-700 px-2 rounded" onClick={handleAdd}>Ajouter</button>
     </div>
   )
 }
 
-// ---------------------- Affecter capitaine ----------------------
-function AssignCaptainForm({
-  team,
-  members,
-  setMembers,
-  users
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  users: ClubUser[]
+// ---- Affecter capitaine ----
+function AssignCaptainForm({ team, members, setMembers, users }: {
+  team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, users: ClubUser[]
 }) {
   const [selectedCaptainId, setSelectedCaptainId] = useState("")
   const currentCaptain = members.find(m => m.team_id === team.id && m.role === "captain")
@@ -181,10 +164,9 @@ function AssignCaptainForm({
       .eq("user_id", selectedCaptainId)
 
     setMembers(prev =>
-      prev.map(m =>
-        m.team_id === team.id
-          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
-          : m
+      prev.map(m => m.team_id === team.id
+        ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
+        : m
       )
     )
     setSelectedCaptainId("")
