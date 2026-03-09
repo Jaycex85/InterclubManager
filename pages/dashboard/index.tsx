@@ -15,7 +15,7 @@ const CaptainDashboard = dynamic(() => import("./capitaine/DashboardCapitaine"),
 const DashboardJoueur = dynamic(() => import("./joueur/DashboardJoueur"), { ssr: false })
 const DashboardClubAdmin = dynamic(() => import("./club_admin/DashboardClubAdmin"), { ssr: false })
 
-// ---------------- INDEX DASHBOARD TYPES ----------------
+// ---------------- TYPES ----------------
 type Roles = {
   admin: boolean
   player: boolean
@@ -35,7 +35,7 @@ type TeamMembership = {
   role: "player" | "captain"
 }
 
-// ---------------- INDEX DASHBOARD ----------------
+// ---------------- COMPONENT ----------------
 export default function DashboardIndex() {
   const [roles, setRoles] = useState<Roles>({
     admin: false,
@@ -74,7 +74,6 @@ export default function DashboardIndex() {
         .from("club_memberships")
         .select("club_id, role, clubs(name)")
         .eq("user_id", userId)
-
       const clubs: ClubMembership[] = (clubsData || []).map((m: any) => ({
         club_id: m.club_id,
         club_name: m.clubs.name,
@@ -87,7 +86,6 @@ export default function DashboardIndex() {
         .from("team_memberships")
         .select("team_id, role, teams(name)")
         .eq("user_id", userId)
-
       const teams: TeamMembership[] = (teamsData || []).map((m: any) => ({
         team_id: m.team_id,
         team_name: m.teams.name,
@@ -118,7 +116,6 @@ export default function DashboardIndex() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
-
       <div className="space-y-4">
 
         {/* ---------- ADMIN PANEL ---------- */}
@@ -137,7 +134,7 @@ export default function DashboardIndex() {
         )}
 
         {/* ---------- CLUB_ADMIN PANEL ---------- */}
-        {(roles.admin || roles.club_admin) && (
+        {(roles.club_admin || roles.admin) && (
           <div className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
@@ -148,7 +145,7 @@ export default function DashboardIndex() {
             <div className={`transition-all duration-500 overflow-hidden ${openPanel === "club" ? "max-h-[5000px]" : "max-h-0"}`}>
               {openPanel === "club" && (
                 <DashboardClubAdmin
-                  roles={roles}
+                  roles={{ admin: roles.admin, club_admin: roles.club_admin }}
                   clubMemberships={clubMemberships}
                 />
               )}
@@ -168,11 +165,7 @@ export default function DashboardIndex() {
                 Capitaine - {t.team_name}
               </button>
               <div className={`transition-all duration-500 overflow-hidden ${openPanel === `captain-${t.team_id}` ? "max-h-[5000px]" : "max-h-0"}`}>
-                {openPanel === `captain-${t.team_id}` && (
-                  <div className="p-4">
-                    <CaptainDashboard />
-                  </div>
-                )}
+                {openPanel === `captain-${t.team_id}` && <div className="p-4"><CaptainDashboard /></div>}
               </div>
             </div>
           ))}
@@ -192,9 +185,7 @@ export default function DashboardIndex() {
                 </button>
                 <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
                   {openPanel === panelKey && (
-                    <div className="p-4">
-                      <DashboardJoueur />
-                    </div>
+                    <div className="p-4"><DashboardJoueur /></div>
                   )}
                 </div>
               </div>
