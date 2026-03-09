@@ -26,54 +26,48 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     const fetchData = async () => {
       setLoading(true)
 
-      // clubs visibles
-      const clubsVisible = roles.admin
+      // 1️⃣ Récupérer clubs visibles pour l’utilisateur
+      const clubIds = roles.admin
         ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
         : clubMemberships.map(c => c.club_id)
 
-      // équipes
-      const teamsQuery = supabase.from("teams").select("*").in("club_id", clubsVisible).order("name", { ascending: true })
-      const { data: teamsData } = await teamsQuery
+      // 2️⃣ Récupérer toutes les équipes de ces clubs
+      const { data: teamsData } = await supabase
+        .from("teams")
+        .select("*")
+        .in("club_id", clubIds)
+        .order("name", { ascending: true })
       setTeams(teamsData || [])
 
-      // membres d'équipes
+      // 3️⃣ Récupérer les membres des équipes
       const teamIds = (teamsData || []).map(t => t.id)
-      const membersQuery = supabase.from("team_memberships").select("*").in("team_id", teamIds)
-      const { data: membersData } = await membersQuery
+      const { data: membersData } = await supabase
+        .from("team_memberships")
+        .select("*")
+        .in("team_id", teamIds)
       setMembers(membersData || [])
 
-      // utilisateurs liés aux clubs
-      const clubUsersQuery = supabase.from("club_memberships")
-        .select("user_id, users(first_name, last_name, email)")
-        .in("club_id", clubsVisible)
-      const { data: clubUsersData } = await clubUsersQuery
+// 4️⃣ Récupérer tous les utilisateurs liés aux clubs
+const { data: clubUsersData } = await supabase
+  .from("club_memberships")
+  .select("user_id, users(first_name, last_name, email)")
+  .in("club_id", clubIds)
 
-      const usersMap: Record<string, ClubUser> = {}
+// Correction TS : type explicite avec as Record<...>
+const usersMap = {} as Record<string, ClubUser>
 
-      // Ajoute tous les utilisateurs provenant de club_memberships
-      (clubUsersData || []).forEach((m: any) => {
-        if (m.users && !usersMap[m.user_id]) {
-          usersMap[m.user_id] = {
-            id: m.user_id,
-            first_name: m.users.first_name,
-            last_name: m.users.last_name,
-            email: m.users.email
-          }
-        }
-      })
+(clubUsersData || []).forEach((m: any) => {
+  if (m.users && !usersMap[m.user_id]) {
+    usersMap[m.user_id] = {
+      id: m.user_id,
+      first_name: m.users.first_name,
+      last_name: m.users.last_name,
+      email: m.users.email
+    }
+  }
+})
 
-      // Ajoute tous les membres d'équipe qui n'ont pas de club_membership
-      (membersData || []).forEach((m: TeamMember) => {
-        if (!usersMap[m.user_id]) {
-          usersMap[m.user_id] = {
-            id: m.user_id,
-            first_name: "(Prénom inconnu)",
-            last_name: "(Nom inconnu)",
-            email: ""
-          }
-        }
-      })
-
+setUsers(Object.values(usersMap))
       setUsers(Object.values(usersMap))
       setLoading(false)
     }
@@ -81,7 +75,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     fetchData()
   }, [roles, clubMemberships])
 
-  if (loading) return <div className="p-4 text-white">Chargement des équipes et joueurs...</div>
+  if (loading) return <div>Chargement des équipes et joueurs...</div>
 
   return (
     <div className="space-y-6 text-white">
@@ -98,21 +92,104 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                 {team.name} ({team.gender}) - {team.category}
               </h2>
 
+              {/* ⚡ Joueurs */}
               <div className="mt-2 space-y-1">
-                {teamMembers.map(tm => {
-                  const displayName = tm.user
-                    ? `${tm.user.first_name} ${tm.user.last_name}`
-                    : "(Joueur non trouvé)"
-                  return (
-                    <div key={tm.user_id} className="flex justify-between items-center">
-                      <span>{displayName} - {tm.role}</span>
-                    </div>
-                  )
-                })}
+                {teamMembers.map(tm => (
+                  <div key={tm.user_id} className="flex justify-between items-center">
+                    <span>{tm.user ? `${tm.user.first_name} ${tm.user.last_name}` : "(Joueur non trouvé)"} - {tm.role}</span>
+                    {(roles.admin || roles.club_admin) && (
+                      <button
+                        className="text-red-400 hover:text-red-600"
+                        onClick={async () => {
+                          await supabase.from("team_memberships").delete()
+                            .eq("team_id", tm.team_id)
+                            .eq("user_id", tm.user_id)
+                          setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
+                        }}
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
+
+              {/* ⚡ Ajouter joueur */}
+              {(roles.admin || roles.club_admin) && (
+                <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
+              )}
+
+              {/* ⚡ Affecter capitaine */}
+              {(roles.admin || roles.club_admin) && (
+                <AssignCaptainForm team={team} members={members} setMembers={setMembers} />
+              )}
             </div>
           )
         })}
+    </div>
+  )
+}
+
+// ---------------------- Ajout joueur ----------------------
+function AddPlayerForm({ team, members, setMembers, users }: { team: Team; members: TeamMember[]; setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>; users: ClubUser[] }) {
+  const availableUsers = users.filter(u => !members.some(m => m.user_id === u.id))
+  const [selectedUserId, setSelectedUserId] = useState<string>("")
+
+  const handleAdd = async () => {
+    if (!selectedUserId) return
+    await supabase.from("team_memberships").insert({ team_id: team.id, user_id: selectedUserId, role: "player" })
+    setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
+    setSelectedUserId("")
+  }
+
+  return (
+    <div className="mt-2 flex gap-2">
+      <select className="bg-gray-700 text-white p-1 rounded" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+        <option value="">Sélectionner un joueur</option>
+        {availableUsers.map(u => (
+          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
+        ))}
+      </select>
+      <button className="bg-green-600 hover:bg-green-700 px-2 rounded" onClick={handleAdd}>Ajouter</button>
+    </div>
+  )
+}
+
+// ---------------------- Affectation capitaine ----------------------
+function AssignCaptainForm({ team, members, setMembers }: { team: Team; members: TeamMember[]; setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>> }) {
+  const [selectedCaptainId, setSelectedCaptainId] = useState<string>("")
+  const currentCaptain = members.find(m => m.team_id === team.id && m.role === "captain")
+
+  const handleAssign = async () => {
+    if (!selectedCaptainId) return
+    if (currentCaptain) {
+      await supabase.from("team_memberships").update({ role: "player" })
+        .eq("team_id", team.id)
+        .eq("user_id", currentCaptain.user_id)
+    }
+    await supabase.from("team_memberships").update({ role: "captain" })
+      .eq("team_id", team.id)
+      .eq("user_id", selectedCaptainId)
+
+    setMembers(prev =>
+      prev.map(m =>
+        m.team_id === team.id
+          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
+          : m
+      )
+    )
+    setSelectedCaptainId("")
+  }
+
+  return (
+    <div className="mt-2 flex gap-2">
+      <select className="bg-gray-700 text-white p-1 rounded" value={selectedCaptainId} onChange={e => setSelectedCaptainId(e.target.value)}>
+        <option value="">Sélectionner capitaine</option>
+        {members.filter(m => m.team_id === team.id).map(m => (
+          <option key={m.user_id} value={m.user_id}>{m.user_id}</option>
+        ))}
+      </select>
+      <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>Assigner</button>
     </div>
   )
 }
