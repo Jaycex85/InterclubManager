@@ -26,10 +26,12 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     const fetchData = async () => {
       setLoading(true)
 
+      // clubs visibles
       const clubsVisible = roles.admin
         ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
         : clubMemberships.map(c => c.club_id)
 
+      // équipes
       const { data: teamsData } = await supabase
         .from("teams")
         .select("*")
@@ -37,6 +39,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         .order("name", { ascending: true })
       setTeams(teamsData || [])
 
+      // membres d'équipes
       const teamIds = (teamsData || []).map(t => t.id)
       const { data: membersData } = await supabase
         .from("team_memberships")
@@ -44,15 +47,16 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         .in("team_id", teamIds)
       setMembers(membersData || [])
 
+      // utilisateurs liés aux clubs
       const { data: clubUsersData } = await supabase
         .from("club_memberships")
         .select("user_id, users(first_name, last_name, email)")
         .in("club_id", clubsVisible)
 
-      // ⚡ Fix build TS error ici
       const usersMap: Record<string, ClubUser> = {}
-      const clubUsersArray: any[] = clubUsersData || []
-      clubUsersArray.forEach(m => {
+
+      // 1️⃣ Ajoute tous les utilisateurs provenant de club_memberships
+      (clubUsersData || []).forEach((m: any) => {
         if (m.users && !usersMap[m.user_id]) {
           usersMap[m.user_id] = {
             id: m.user_id,
@@ -62,6 +66,19 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           }
         }
       })
+
+      // 2️⃣ Ajoute tous les membres d'équipe qui n'ont pas de club_membership
+      (membersData || []).forEach((m: TeamMember) => {
+        if (!usersMap[m.user_id]) {
+          usersMap[m.user_id] = {
+            id: m.user_id,
+            first_name: "(Prénom inconnu)",
+            last_name: "(Nom inconnu)",
+            email: ""
+          }
+        }
+      })
+
       setUsers(Object.values(usersMap))
       setLoading(false)
     }
@@ -87,24 +104,29 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
               </h2>
 
               <div className="mt-2 space-y-1">
-                {teamMembers.map(tm => (
-                  <div key={tm.user_id} className="flex justify-between items-center">
-                    <span>{tm.user ? `${tm.user.first_name} ${tm.user.last_name}` : "(Joueur non trouvé)"} - {tm.role}</span>
-                    {(roles.admin || roles.club_admin) && (
-                      <button
-                        className="text-red-400 hover:text-red-600"
-                        onClick={async () => {
-                          await supabase.from("team_memberships").delete()
-                            .eq("team_id", tm.team_id)
-                            .eq("user_id", tm.user_id)
-                          setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
-                        }}
-                      >
-                        Supprimer
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {teamMembers.map(tm => {
+                  const displayName = tm.user
+                    ? `${tm.user.first_name} ${tm.user.last_name}`
+                    : "(Joueur non trouvé)"
+                  return (
+                    <div key={tm.user_id} className="flex justify-between items-center">
+                      <span>{displayName} - {tm.role}</span>
+                      {(roles.admin || roles.club_admin) && (
+                        <button
+                          className="text-red-400 hover:text-red-600"
+                          onClick={async () => {
+                            await supabase.from("team_memberships").delete()
+                              .eq("team_id", tm.team_id)
+                              .eq("user_id", tm.user_id)
+                            setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
+                          }}
+                        >
+                          Supprimer
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
 
               {(roles.admin || roles.club_admin) && (
@@ -120,7 +142,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ---- Ajouter joueur ----
+// ---------------------- Ajouter joueur ----------------------
 function AddPlayerForm({ team, members, setMembers, users }: {
   team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, users: ClubUser[]
 }) {
@@ -145,7 +167,7 @@ function AddPlayerForm({ team, members, setMembers, users }: {
   )
 }
 
-// ---- Affecter capitaine ----
+// ---------------------- Affecter capitaine ----------------------
 function AssignCaptainForm({ team, members, setMembers, users }: {
   team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, users: ClubUser[]
 }) {
