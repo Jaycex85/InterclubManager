@@ -10,15 +10,18 @@ const supabase = createClient(
 
 export default function DashboardClubAdmin(){
 
- const [userRole,setUserRole] = useState<string | null>(null)
-
  const [clubs,setClubs] = useState<any[]>([])
  const [selectedClub,setSelectedClub] = useState<string | null>(null)
 
  const [teams,setTeams] = useState<any[]>([])
  const [players,setPlayers] = useState<any[]>([])
+ const [teamMembers,setTeamMembers] = useState<any[]>([])
 
  const [newTeam,setNewTeam] = useState("")
+ const [newCategory,setNewCategory] = useState("Senior")
+
+ const [teamCount,setTeamCount] = useState(0)
+ const [playerCount,setPlayerCount] = useState(0)
 
  useEffect(()=>{
 
@@ -36,11 +39,7 @@ export default function DashboardClubAdmin(){
    .eq("auth_id",session?.user.id)
    .single()
 
-  setUserRole(user.role)
-
   let clubsData:any[] = []
-
-  // ADMIN GLOBAL
 
   if(user.role === "admin"){
 
@@ -50,11 +49,7 @@ export default function DashboardClubAdmin(){
 
    clubsData = data || []
 
-  }
-
-  // CLUB ADMIN
-
-  else{
+  }else{
 
    const { data } = await supabase
     .from("club_memberships")
@@ -81,23 +76,26 @@ export default function DashboardClubAdmin(){
 
  async function loadClubData(clubId:string){
 
-  // TEAMS
-
   const { data:teamsData } = await supabase
    .from("teams")
-   .select("*")
+   .select("id,name,category")
    .eq("club_id",clubId)
-
-  setTeams(teamsData || [])
-
-  // PLAYERS
 
   const { data:playersData } = await supabase
    .from("club_memberships")
-   .select("user_id,role,users(name,email)")
+   .select("user_id,users(name,email)")
    .eq("club_id",clubId)
 
+  const { data:membersData } = await supabase
+   .from("team_memberships")
+   .select("*")
+
+  setTeams(teamsData || [])
   setPlayers(playersData || [])
+  setTeamMembers(membersData || [])
+
+  setTeamCount(teamsData?.length || 0)
+  setPlayerCount(playersData?.length || 0)
 
  }
 
@@ -105,187 +103,267 @@ export default function DashboardClubAdmin(){
 
   if(!newTeam || !selectedClub) return
 
-  await supabase
-   .from("teams")
-   .insert({
-    name:newTeam,
-    club_id:selectedClub
-   })
+  await supabase.from("teams").insert({
+
+   name:newTeam,
+   category:newCategory,
+   club_id:selectedClub
+
+  })
 
   setNewTeam("")
-
   loadClubData(selectedClub)
+
+ }
+
+ async function deleteTeam(teamId:string){
+
+  await supabase.from("teams").delete().eq("id",teamId)
+
+  loadClubData(selectedClub!)
 
  }
 
  async function addPlayerToTeam(userId:string,teamId:string){
 
-  await supabase
-   .from("team_memberships")
-   .insert({
-    user_id:userId,
-    team_id:teamId,
-    role:"player"
-   })
+  await supabase.from("team_memberships").insert({
 
-  alert("Joueur ajouté")
+   user_id:userId,
+   team_id:teamId,
+   role:"player"
+
+  })
+
+  loadClubData(selectedClub!)
 
  }
 
- async function promoteCaptain(userId:string,teamId:string){
+ async function removePlayer(userId:string,teamId:string){
 
   await supabase
    .from("team_memberships")
-   .update({ role:"captain" })
+   .delete()
    .eq("user_id",userId)
    .eq("team_id",teamId)
 
-  alert("Capitaine défini")
+  loadClubData(selectedClub!)
+
+ }
+
+ async function setCaptain(userId:string,teamId:string){
+
+  await supabase
+   .from("team_memberships")
+   .update({role:"player"})
+   .eq("team_id",teamId)
+
+  await supabase
+   .from("team_memberships")
+   .update({role:"captain"})
+   .eq("user_id",userId)
+   .eq("team_id",teamId)
+
+  loadClubData(selectedClub!)
 
  }
 
  return(
 
-  <div className="space-y-8">
+ <div className="space-y-6">
 
-   <h2 className="text-2xl font-bold text-yellow-400">
-    Gestion des Clubs
-   </h2>
+ <h2 className="text-2xl font-bold text-yellow-400">
+ Gestion Club
+ </h2>
 
-   {/* SELECT CLUB */}
+ {/* STATS */}
 
-   {clubs.length > 1 && (
+ <div className="grid grid-cols-2 gap-4">
 
-    <div className="bg-gray-800 p-4 rounded">
+ <div className="bg-gray-800 p-4 rounded">
+ <div className="text-gray-400">Equipes</div>
+ <div className="text-2xl font-bold">{teamCount}</div>
+ </div>
 
-     <label className="block mb-2 font-bold">
-      Choisir un club
-     </label>
+ <div className="bg-gray-800 p-4 rounded">
+ <div className="text-gray-400">Joueurs</div>
+ <div className="text-2xl font-bold">{playerCount}</div>
+ </div>
 
-     <select
-      value={selectedClub || ""}
-      onChange={(e)=>{
-       setSelectedClub(e.target.value)
-       loadClubData(e.target.value)
-      }}
-      className="text-black p-2 rounded w-full"
-     >
+ </div>
 
-      {clubs.map(c=>(
-       <option key={c.id} value={c.id}>
-        {c.name}
-       </option>
-      ))}
+ {/* SELECT CLUB */}
 
-     </select>
+ {clubs.length > 1 && (
 
-    </div>
+ <select
+ value={selectedClub || ""}
+ onChange={(e)=>{
+ setSelectedClub(e.target.value)
+ loadClubData(e.target.value)
+ }}
+ className="text-black p-2 rounded"
+ >
 
-   )}
+ {clubs.map(c=>(
+ <option key={c.id} value={c.id}>
+ {c.name}
+ </option>
+ ))}
 
-   {/* CREATE TEAM */}
+ </select>
 
-   <div className="bg-gray-800 p-4 rounded">
+ )}
 
-    <h3 className="font-bold mb-2">
-     Créer une équipe
-    </h3>
+ {/* CREATE TEAM */}
 
-    <div className="flex gap-2">
+ <div className="bg-gray-800 p-4 rounded space-y-2">
 
-     <input
-      value={newTeam}
-      onChange={(e)=>setNewTeam(e.target.value)}
-      placeholder="Nom de l'équipe"
-      className="text-black p-2 rounded w-full"
-     />
+ <h3 className="font-bold">Créer une équipe</h3>
 
-     <button
-      onClick={createTeam}
-      className="bg-yellow-500 text-black px-4 rounded"
-     >
-      Créer
-     </button>
+ <input
+ value={newTeam}
+ onChange={(e)=>setNewTeam(e.target.value)}
+ placeholder="Nom équipe"
+ className="text-black p-2 rounded w-full"
+ />
 
-    </div>
+ <select
+ value={newCategory}
+ onChange={(e)=>setNewCategory(e.target.value)}
+ className="text-black p-2 rounded w-full"
+ >
+ <option>Senior</option>
+ <option>U18</option>
+ <option>U15</option>
+ <option>Loisir</option>
+ </select>
 
-   </div>
+ <button
+ onClick={createTeam}
+ className="bg-yellow-500 text-black px-4 py-2 rounded"
+ >
+ Créer équipe
+ </button>
 
-   {/* TEAMS */}
+ </div>
 
-   <div className="bg-gray-800 p-4 rounded">
+ {/* TEAMS */}
 
-    <h3 className="font-bold mb-4">
-     Équipes du club
-    </h3>
+ {teams.map(team=>{
 
-    {teams.length === 0 && (
-     <div>Aucune équipe</div>
-    )}
+ const members = teamMembers.filter(
+ m=>m.team_id === team.id
+ )
 
-    {teams.map(team=>(
-     <div key={team.id} className="mb-6">
+ return(
 
-      <div className="text-yellow-300 font-bold mb-2">
-       {team.name}
-      </div>
+ <div key={team.id} className="bg-gray-800 p-4 rounded space-y-2">
 
-      {players.map((p:any)=>(
-       <div
-        key={p.user_id}
-        className="flex justify-between bg-gray-700 p-2 rounded mb-1"
-       >
+ <div className="flex justify-between">
 
-        <span>
-         {p.users?.name || p.users?.email}
-        </span>
+ <div className="font-bold text-yellow-300">
+ {team.name} ({team.category})
+ </div>
 
-        <div className="flex gap-2">
+ <button
+ onClick={()=>deleteTeam(team.id)}
+ className="bg-red-500 px-2 rounded"
+ >
+ Supprimer
+ </button>
 
-         <button
-          onClick={()=>addPlayerToTeam(p.user_id,team.id)}
-          className="bg-green-500 text-black px-2 rounded"
-         >
-          Ajouter
-         </button>
+ </div>
 
-         <button
-          onClick={()=>promoteCaptain(p.user_id,team.id)}
-          className="bg-blue-500 text-black px-2 rounded"
-         >
-          Capitaine
-         </button>
+ {/* MEMBERS */}
 
-        </div>
+ {members.map(m=>{
 
-       </div>
-      ))}
+ const player = players.find(
+ p=>p.user_id === m.user_id
+ )
 
-     </div>
-    ))}
+ return(
 
-   </div>
+ <div
+ key={m.user_id}
+ className="flex justify-between bg-gray-700 p-2 rounded"
+ >
 
-   {/* PLAYERS */}
+ <span>
+ {player?.users?.name || player?.users?.email}
+ {m.role === "captain" && " (Capitaine)"}
+ </span>
 
-   <div className="bg-gray-800 p-4 rounded">
+ <div className="flex gap-2">
 
-    <h3 className="font-bold mb-4">
-     Joueurs du club
-    </h3>
+ <button
+ onClick={()=>setCaptain(m.user_id,team.id)}
+ className="bg-blue-500 px-2 rounded"
+ >
+ Capitaine
+ </button>
 
-    {players.map((p:any)=>(
-     <div
-      key={p.user_id}
-      className="bg-gray-700 p-2 rounded mb-1"
-     >
-      {p.users?.name || p.users?.email}
-     </div>
-    ))}
+ <button
+ onClick={()=>removePlayer(m.user_id,team.id)}
+ className="bg-red-500 px-2 rounded"
+ >
+ Retirer
+ </button>
 
-   </div>
+ </div>
 
-  </div>
+ </div>
 
  )
+
+ })}
+
+ {/* ADD PLAYERS */}
+
+ <div className="mt-2">
+
+ {players.map(p=>{
+
+ const already = members.find(
+ m=>m.user_id === p.user_id
+ )
+
+ if(already) return null
+
+ return(
+
+ <div
+ key={p.user_id}
+ className="flex justify-between bg-gray-700 p-2 rounded mb-1"
+ >
+
+ <span>
+ {p.users?.name || p.users?.email}
+ </span>
+
+ <button
+ onClick={()=>addPlayerToTeam(p.user_id,team.id)}
+ className="bg-green-500 px-2 rounded"
+ >
+ Ajouter
+ </button>
+
+ </div>
+
+ )
+
+ })}
+
+ </div>
+
+ </div>
+
+ )
+
+ })}
+
+ </div>
+
+ )
+
 }
