@@ -93,7 +93,7 @@ export default function DashboardIndex() {
       }))
       setTeamMemberships(teams)
 
-      // 3️⃣ Global roles
+      // 3️⃣ Global roles — captains peuvent aussi voir dashboard joueur
       setRoles({
         admin: userData.role === "admin",
         player: teams.some(t => t.role === "player" || t.role === "captain"),
@@ -116,7 +116,6 @@ export default function DashboardIndex() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
-
       <div className="space-y-4">
 
         {/* ---------- ADMIN PANEL ---------- */}
@@ -135,7 +134,7 @@ export default function DashboardIndex() {
         )}
 
         {/* ---------- CLUB_ADMIN PANEL ---------- */}
-        {roles.club_admin && clubMemberships.length > 0 && (
+        {(roles.club_admin || roles.admin) && clubMemberships.length > 0 && (
           <div className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
@@ -145,7 +144,14 @@ export default function DashboardIndex() {
             </button>
             <div className={`transition-all duration-500 overflow-hidden ${openPanel === "club_admin" ? "max-h-[5000px]" : "max-h-0"}`}>
               {openPanel === "club_admin" && (
-                <DashboardClubAdmin clubId={clubMemberships[0].club_id} />
+                <div className="space-y-6">
+                  {(roles.admin
+                    ? clubMemberships // admin global peut voir tous les clubs
+                    : clubMemberships.filter(c => c.role === "club_admin")
+                  ).map(c => (
+                    <DashboardClubAdmin key={c.club_id} clubId={c.club_id} />
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -174,7 +180,7 @@ export default function DashboardIndex() {
 
         {/* ---------- PLAYER PANELS ---------- */}
         {roles.player && teamMemberships
-          .filter(t => t.role === "player" || t.role === "captain") // captains inclus
+          .filter(t => t.role === "player" || t.role === "captain")
           .map(t => {
             const panelKey = `player-${t.team_id}`
             return (
