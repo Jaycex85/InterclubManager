@@ -74,6 +74,7 @@ export default function DashboardIndex() {
         .from("club_memberships")
         .select("club_id, role, clubs(name)")
         .eq("user_id", userId)
+
       const clubs: ClubMembership[] = (clubsData || []).map((m: any) => ({
         club_id: m.club_id,
         club_name: m.clubs.name,
@@ -86,6 +87,7 @@ export default function DashboardIndex() {
         .from("team_memberships")
         .select("team_id, role, teams(name)")
         .eq("user_id", userId)
+
       const teams: TeamMembership[] = (teamsData || []).map((m: any) => ({
         team_id: m.team_id,
         team_name: m.teams.name,
@@ -93,7 +95,7 @@ export default function DashboardIndex() {
       }))
       setTeamMemberships(teams)
 
-      // 3️⃣ Global roles — captains peuvent aussi voir dashboard joueur
+      // 3️⃣ Global roles
       setRoles({
         admin: userData.role === "admin",
         player: teams.some(t => t.role === "player" || t.role === "captain"),
@@ -116,6 +118,7 @@ export default function DashboardIndex() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard</h1>
+
       <div className="space-y-4">
 
         {/* ---------- ADMIN PANEL ---------- */}
@@ -134,24 +137,20 @@ export default function DashboardIndex() {
         )}
 
         {/* ---------- CLUB_ADMIN PANEL ---------- */}
-        {(roles.club_admin || roles.admin) && clubMemberships.length > 0 && (
+        {(roles.admin || roles.club_admin) && (
           <div className="border border-gray-700 rounded overflow-hidden">
             <button
               className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold"
-              onClick={() => setOpenPanel(openPanel === "club_admin" ? null : "club_admin")}
+              onClick={() => setOpenPanel(openPanel === "club" ? null : "club")}
             >
               Club Admin
             </button>
-            <div className={`transition-all duration-500 overflow-hidden ${openPanel === "club_admin" ? "max-h-[5000px]" : "max-h-0"}`}>
-              {openPanel === "club_admin" && (
-                <div className="space-y-6">
-                  {(roles.admin
-                    ? clubMemberships // admin global peut voir tous les clubs
-                    : clubMemberships.filter(c => c.role === "club_admin")
-                  ).map(c => (
-                    <DashboardClubAdmin key={c.club_id} clubId={c.club_id} />
-                  ))}
-                </div>
+            <div className={`transition-all duration-500 overflow-hidden ${openPanel === "club" ? "max-h-[5000px]" : "max-h-0"}`}>
+              {openPanel === "club" && (
+                <DashboardClubAdmin
+                  roles={roles}
+                  clubMemberships={clubMemberships}
+                />
               )}
             </div>
           </div>
@@ -201,7 +200,6 @@ export default function DashboardIndex() {
               </div>
             )
           })}
-
       </div>
     </div>
   )
