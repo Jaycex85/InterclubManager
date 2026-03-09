@@ -4,366 +4,206 @@ import { useEffect, useState } from "react"
 import { createClient } from "@supabase/supabase-js"
 
 const supabase = createClient(
- process.env.NEXT_PUBLIC_SUPABASE_URL!,
- process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-export default function DashboardClubAdmin(){
+// -------------------------------------------
+// Catégories
+const categories: Record<string, string[]> = {
+  Homme: ["P50","P100","P200","P300","P400","P500","P700","P1000"],
+  Dames: ["WD50","WD100","WD200","WD300","WD400","WD500"],
+  Mixte: ["MX50","MX100","MX200","MX300","MX400","MXOPEN"]
+}
 
- const [clubs,setClubs] = useState<any[]>([])
- const [selectedClub,setSelectedClub] = useState<string | null>(null)
+// -------------------------------------------
+// Types
+type User = { id: string; first_name: string; last_name: string; email: string }
+type Team = { id: string; name: string; gender: string; players: User[]; captain?: User }
 
- const [teams,setTeams] = useState<any[]>([])
- const [players,setPlayers] = useState<any[]>([])
- const [teamMembers,setTeamMembers] = useState<any[]>([])
+// -------------------------------------------
+// DashboardClubAdmin
+export default function DashboardClubAdmin({ clubId }: { clubId: string }) {
+  const [teams, setTeams] = useState<Team[]>([])
+  const [clubPlayers, setClubPlayers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
 
- const [newTeam,setNewTeam] = useState("")
- const [newCategory,setNewCategory] = useState("Senior")
+  const [newTeamName, setNewTeamName] = useState("")
+  const [newTeamCategory, setNewTeamCategory] = useState("")
+  const [filterCategory, setFilterCategory] = useState("")
 
- const [teamCount,setTeamCount] = useState(0)
- const [playerCount,setPlayerCount] = useState(0)
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
 
- useEffect(()=>{
+      // 1️⃣ Récupérer les équipes du club
+      const { data: teamsData } = await supabase
+        .from("teams")
+        .select(`id, name, gender, team_memberships(user_id, role, users(first_name, last_name, email))`)
+        .eq("club_id", clubId)
 
-  init()
+      const teamsMapped: Team[] = (teamsData || []).map((t: any) => {
+        const players: User[] = t.team_memberships
+          .filter((tm: any) => tm.role === "player")
+          .map((tm: any) => tm.users)
+        const captain: User | undefined = t.team_memberships
+          .filter((tm: any) => tm.role === "captain")
+          .map((tm: any) => tm.users)[0]
+        return { id: t.id, name: t.name, gender: t.gender, players, captain }
+      })
 
- },[])
+      setTeams(teamsMapped)
 
- async function init(){
+      // 2️⃣ Récupérer tous les joueurs liés au club
+      const { data: clubUsers } = await supabase
+        .from("club_memberships")
+        .select(`user_id, users(first_name, last_name, email)`)
+        .eq("club_id", clubId)
 
-  const { data:{session} } = await supabase.auth.getSession()
+      setClubPlayers((clubUsers || []).map((u: any) => ({ ...u.users, id: u.user_id })))
+      setLoading(false)
+    }
 
-  const { data:user } = await supabase
-   .from("users")
-   .select("id,role")
-   .eq("auth_id",session?.user.id)
-   .single()
+    fetchData()
+  }, [clubId])
 
-  let clubsData:any[] = []
+  const handleAddTeam = async () => {
+    if (!newTeamName || !newTeamCategory) return
+    const { data: inserted, error } = await supabase
+      .from("teams")
+      .insert({ name: newTeamName, gender: newTeamCategory, club_id: clubId })
+      .select()
+      .single()
 
-  if(user.role === "admin"){
-
-   const { data } = await supabase
-    .from("clubs")
-    .select("id,name")
-
-   clubsData = data || []
-
-  }else{
-
-   const { data } = await supabase
-    .from("club_memberships")
-    .select("club_id,clubs(name)")
-    .eq("user_id",user.id)
-
-   clubsData = (data || []).map((c:any)=>({
-    id:c.club_id,
-    name:c.clubs.name
-   }))
-
+    if (!error && inserted) {
+      setTeams(prev => [...prev, { ...inserted, players: [] }])
+      setNewTeamName("")
+      setNewTeamCategory("")
+    } else console.error(error)
   }
 
-  setClubs(clubsData)
+  const handleAddPlayer = async (teamId: string, userId: string, role: "player" | "captain") => {
+    const { data: inserted, error } = await supabase
+      .from("team_memberships")
+      .insert({ team_id: teamId, user_id: userId, role })
+      .select()
+      .single()
 
-  if(clubsData.length > 0){
-
-   setSelectedClub(clubsData[0].id)
-   loadClubData(clubsData[0].id)
-
+    if (!error && inserted) {
+      setTeams(prev =>
+        prev.map(t => {
+          if (t.id === teamId) {
+            const user = clubPlayers.find(u => u.id === userId)
+            if (!user) return t
+            if (role === "captain") return { ...t, captain: user }
+            return { ...t, players: [...t.players, user] }
+          }
+          return t
+        })
+      )
+    } else console.error(error)
   }
 
- }
-
- async function loadClubData(clubId:string){
-
-  const { data:teamsData } = await supabase
-   .from("teams")
-   .select("id,name,category")
-   .eq("club_id",clubId)
-
-  const { data:playersData } = await supabase
-   .from("club_memberships")
-   .select("user_id,users(name,email)")
-   .eq("club_id",clubId)
-
-  const { data:membersData } = await supabase
-   .from("team_memberships")
-   .select("*")
-
-  setTeams(teamsData || [])
-  setPlayers(playersData || [])
-  setTeamMembers(membersData || [])
-
-  setTeamCount(teamsData?.length || 0)
-  setPlayerCount(playersData?.length || 0)
-
- }
-
- async function createTeam(){
-
-  if(!newTeam || !selectedClub) return
-
-  await supabase.from("teams").insert({
-
-   name:newTeam,
-   category:newCategory,
-   club_id:selectedClub
-
-  })
-
-  setNewTeam("")
-  loadClubData(selectedClub)
-
- }
-
- async function deleteTeam(teamId:string){
-
-  await supabase.from("teams").delete().eq("id",teamId)
-
-  loadClubData(selectedClub!)
-
- }
-
- async function addPlayerToTeam(userId:string,teamId:string){
-
-  await supabase.from("team_memberships").insert({
-
-   user_id:userId,
-   team_id:teamId,
-   role:"player"
-
-  })
-
-  loadClubData(selectedClub!)
-
- }
-
- async function removePlayer(userId:string,teamId:string){
-
-  await supabase
-   .from("team_memberships")
-   .delete()
-   .eq("user_id",userId)
-   .eq("team_id",teamId)
-
-  loadClubData(selectedClub!)
-
- }
-
- async function setCaptain(userId:string,teamId:string){
-
-  await supabase
-   .from("team_memberships")
-   .update({role:"player"})
-   .eq("team_id",teamId)
-
-  await supabase
-   .from("team_memberships")
-   .update({role:"captain"})
-   .eq("user_id",userId)
-   .eq("team_id",teamId)
-
-  loadClubData(selectedClub!)
-
- }
-
- return(
-
- <div className="space-y-6">
-
- <h2 className="text-2xl font-bold text-yellow-400">
- Gestion Club
- </h2>
-
- {/* STATS */}
-
- <div className="grid grid-cols-2 gap-4">
-
- <div className="bg-gray-800 p-4 rounded">
- <div className="text-gray-400">Equipes</div>
- <div className="text-2xl font-bold">{teamCount}</div>
- </div>
-
- <div className="bg-gray-800 p-4 rounded">
- <div className="text-gray-400">Joueurs</div>
- <div className="text-2xl font-bold">{playerCount}</div>
- </div>
-
- </div>
-
- {/* SELECT CLUB */}
-
- {clubs.length > 1 && (
-
- <select
- value={selectedClub || ""}
- onChange={(e)=>{
- setSelectedClub(e.target.value)
- loadClubData(e.target.value)
- }}
- className="text-black p-2 rounded"
- >
-
- {clubs.map(c=>(
- <option key={c.id} value={c.id}>
- {c.name}
- </option>
- ))}
-
- </select>
-
- )}
-
- {/* CREATE TEAM */}
-
- <div className="bg-gray-800 p-4 rounded space-y-2">
-
- <h3 className="font-bold">Créer une équipe</h3>
-
- <input
- value={newTeam}
- onChange={(e)=>setNewTeam(e.target.value)}
- placeholder="Nom équipe"
- className="text-black p-2 rounded w-full"
- />
-
- <select
- value={newCategory}
- onChange={(e)=>setNewCategory(e.target.value)}
- className="text-black p-2 rounded w-full"
- >
- <option>Senior</option>
- <option>U18</option>
- <option>U15</option>
- <option>Loisir</option>
- </select>
-
- <button
- onClick={createTeam}
- className="bg-yellow-500 text-black px-4 py-2 rounded"
- >
- Créer équipe
- </button>
-
- </div>
-
- {/* TEAMS */}
-
- {teams.map(team=>{
-
- const members = teamMembers.filter(
- m=>m.team_id === team.id
- )
-
- return(
-
- <div key={team.id} className="bg-gray-800 p-4 rounded space-y-2">
-
- <div className="flex justify-between">
-
- <div className="font-bold text-yellow-300">
- {team.name} ({team.category})
- </div>
-
- <button
- onClick={()=>deleteTeam(team.id)}
- className="bg-red-500 px-2 rounded"
- >
- Supprimer
- </button>
-
- </div>
-
- {/* MEMBERS */}
-
- {members.map(m=>{
-
- const player = players.find(
- p=>p.user_id === m.user_id
- )
-
- return(
-
- <div
- key={m.user_id}
- className="flex justify-between bg-gray-700 p-2 rounded"
- >
-
- <span>
- {player?.users?.name || player?.users?.email}
- {m.role === "captain" && " (Capitaine)"}
- </span>
-
- <div className="flex gap-2">
-
- <button
- onClick={()=>setCaptain(m.user_id,team.id)}
- className="bg-blue-500 px-2 rounded"
- >
- Capitaine
- </button>
-
- <button
- onClick={()=>removePlayer(m.user_id,team.id)}
- className="bg-red-500 px-2 rounded"
- >
- Retirer
- </button>
-
- </div>
-
- </div>
-
- )
-
- })}
-
- {/* ADD PLAYERS */}
-
- <div className="mt-2">
-
- {players.map(p=>{
-
- const already = members.find(
- m=>m.user_id === p.user_id
- )
-
- if(already) return null
-
- return(
-
- <div
- key={p.user_id}
- className="flex justify-between bg-gray-700 p-2 rounded mb-1"
- >
-
- <span>
- {p.users?.name || p.users?.email}
- </span>
-
- <button
- onClick={()=>addPlayerToTeam(p.user_id,team.id)}
- className="bg-green-500 px-2 rounded"
- >
- Ajouter
- </button>
-
- </div>
-
- )
-
- })}
-
- </div>
-
- </div>
-
- )
-
- })}
-
- </div>
-
- )
-
+  const filteredTeams = filterCategory
+    ? teams.filter(t => t.gender === filterCategory)
+    : teams
+
+  if (loading) return <div>Chargement...</div>
+
+  return (
+    <div className="p-6 bg-gray-900 text-white min-h-screen">
+      <h2 className="text-2xl font-bold mb-4">Dashboard Club Admin</h2>
+
+      {/* ---------- Compteurs ---------- */}
+      <div className="flex gap-4 mb-6">
+        <div>Nombre d'équipes : {teams.length}</div>
+        <div>Nombre de joueurs : {clubPlayers.length}</div>
+      </div>
+
+      {/* ---------- Filtre catégorie ---------- */}
+      <select
+        className="p-2 mb-4 bg-gray-800 rounded"
+        value={filterCategory}
+        onChange={e => setFilterCategory(e.target.value)}
+      >
+        <option value="">Toutes catégories</option>
+        {Object.values(categories).flat().map(cat => (
+          <option key={cat} value={cat}>{cat}</option>
+        ))}
+      </select>
+
+      {/* ---------- Formulaire ajout équipe ---------- */}
+      <div className="mb-6 p-4 border border-gray-700 rounded bg-gray-800 flex gap-2">
+        <input
+          type="text"
+          placeholder="Nom de l'équipe"
+          className="p-2 rounded bg-gray-900 flex-1"
+          value={newTeamName}
+          onChange={e => setNewTeamName(e.target.value)}
+        />
+        <select
+          className="p-2 rounded bg-gray-900"
+          value={newTeamCategory}
+          onChange={e => setNewTeamCategory(e.target.value)}
+        >
+          <option value="">Catégorie</option>
+          {Object.entries(categories).map(([gender, list]) =>
+            list.map(cat => <option key={cat} value={cat}>{`(${gender}) ${cat}`}</option>)
+          )}
+        </select>
+        <button className="bg-yellow-400 text-black px-4 rounded font-bold" onClick={handleAddTeam}>
+          Ajouter
+        </button>
+      </div>
+
+      {/* ---------- Liste des équipes ---------- */}
+      {filteredTeams.map(team => (
+        <div key={team.id} className="mb-4 p-4 border border-gray-700 rounded bg-gray-800">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">{team.name} - {team.gender}</h3>
+          </div>
+
+          {/* Capitaine */}
+          <div className="mb-2">
+            <strong>Capitaine :</strong> {team.captain ? `${team.captain.first_name} ${team.captain.last_name}` : "(non défini)"}
+          </div>
+
+          {/* Joueurs */}
+          <div className="mb-2">
+            <strong>Joueurs :</strong> {team.players.map(p => `${p.first_name} ${p.last_name}`).join(", ") || "(aucun)"}
+          </div>
+
+          {/* Ajouter joueur / capitaine */}
+          <div className="flex gap-2">
+            <select id={`player-${team.id}`} className="p-2 rounded bg-gray-900 flex-1">
+              <option value="">Sélectionner joueur</option>
+              {clubPlayers.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.first_name} {p.last_name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="bg-green-500 px-3 rounded font-bold"
+              onClick={() => {
+                const sel = (document.getElementById(`player-${team.id}`) as HTMLSelectElement).value
+                if (sel) handleAddPlayer(team.id, sel, "player")
+              }}
+            >
+              Ajouter joueur
+            </button>
+            <button
+              className="bg-blue-500 px-3 rounded font-bold"
+              onClick={() => {
+                const sel = (document.getElementById(`player-${team.id}`) as HTMLSelectElement).value
+                if (sel) handleAddPlayer(team.id, sel, "captain")
+              }}
+            >
+              Définir capitaine
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
