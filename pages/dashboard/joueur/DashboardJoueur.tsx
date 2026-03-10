@@ -52,29 +52,28 @@ export default function DashboardJoueur() {
   })
   const [userId, setUserId] = useState<string>('')
 
-  // Initialisation : utilisateur et équipes
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
 
-      // Récupérer les équipes avec nom
+      // Récupérer les équipes avec leur nom
       const { data: memberships } = await supabase
         .from('team_memberships')
-        .select('team_id, teams(name)')
+        .select('team_id, teams!inner(name)')
         .eq('user_id', user.id)
 
       const userTeams: Team[] = memberships?.map(m => ({
-        id: m.team_id,
-        name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
+        id: String(m.team_id),
+        name: m.teams?.name || `Équipe ${m.team_id}`
       })) || []
 
       setTeams(userTeams)
 
       const teamIds = userTeams.map(t => t.id)
       if (teamIds.length > 0) {
-        await fetchData(teamIds, user.id)
+        await fetchData(teamIds)
       }
 
       setLoading(false)
@@ -82,16 +81,17 @@ export default function DashboardJoueur() {
     init()
   }, [])
 
-  // Récupération des matchs et disponibilités
-  const fetchData = async (teamIds: string[], uid: string) => {
+  const fetchData = async (teamIds: string[]) => {
+    // Récupération des matchs
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
       .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (matchesData) setMatches(matchesData)
+    if (matchesData) setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
 
+    // Récupération des disponibilités
     const { data: availData } = await supabase
       .from('availability')
       .select('match_id, user_id, status, selection_status')
@@ -100,7 +100,6 @@ export default function DashboardJoueur() {
     if (availData) setAvailability(availData)
   }
 
-  // Mise à jour de la disponibilité
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
 
@@ -121,7 +120,6 @@ export default function DashboardJoueur() {
         .insert({ match_id: matchId, user_id: userId, status })
     }
 
-    // Mise à jour locale
     setAvailability(prev => {
       if (existing) {
         return prev.map(a => a.match_id === matchId && a.user_id === userId ? { ...a, status } : a)
@@ -137,7 +135,6 @@ export default function DashboardJoueur() {
   const getSelectionStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
-  // Affichage du modal composition
   const showComposition = async (matchId: string, matchName: string) => {
     const { data } = await supabase
       .from('availability')
@@ -157,7 +154,6 @@ export default function DashboardJoueur() {
     }
   }
 
-  // Carte de match
   const renderMatch = (m: Match, editable: boolean) => {
     const status = getStatus(m.id)
     const selection = getSelectionStatus(m.id)
@@ -167,9 +163,7 @@ export default function DashboardJoueur() {
         <div className="flex justify-between items-center">
           <div>
             <div className="font-bold text-lg">{m.opponent}</div>
-            <div className="text-gray-200">
-              {m.match_date} — {m.match_time} ({m.location_type})
-            </div>
+            <div className="text-gray-200">{m.match_date} — {m.match_time} ({m.location_type})</div>
           </div>
           {m.clubaddress && (
             <a
@@ -230,12 +224,8 @@ export default function DashboardJoueur() {
         if (!teamMatches.length) return null
 
         const matchesEnAttente = teamMatches.filter(m => !m.composition_validated)
-        const mesMatchs = teamMatches.filter(m =>
-          m.composition_validated && getSelectionStatus(m.id) === 'selected'
-        )
-        const autresMatchs = teamMatches.filter(m =>
-          m.composition_validated && getSelectionStatus(m.id) !== 'selected'
-        )
+        const mesMatchs = teamMatches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
+        const autresMatchs = teamMatches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
 
         return (
           <div key={team.id} className="space-y-4">
