@@ -58,17 +58,21 @@ export default function DashboardJoueur() {
       if (!user) return
       setUserId(user.id)
 
-      // Récupérer les équipes avec leur nom
+      // 1️⃣ Récupérer les memberships et le nom de l'équipe
       const { data: memberships } = await supabase
         .from('team_memberships')
-        .select('team_id, teams!inner(name)')
+        .select('team_id, teams(name)')
         .eq('user_id', user.id)
 
-      // Corrige l'accès à `teams[0]` car Supabase renvoie un tableau
-      const userTeams: Team[] = memberships?.map(m => ({
-        id: String(m.team_id),
-        name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
-      })) || []
+      if (!memberships) return
+
+      // 2️⃣ Construire les équipes uniques
+      const userTeams: Team[] = memberships
+        .map(m => ({
+          id: String(m.team_id),
+          name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
+        }))
+        .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i) // supprimer doublons
 
       setTeams(userTeams)
 
@@ -83,16 +87,17 @@ export default function DashboardJoueur() {
   }, [])
 
   const fetchData = async (teamIds: string[]) => {
-    // Récupération des matchs pour toutes les équipes de l'utilisateur
+    // récupérer uniquement les matchs des équipes de l'utilisateur
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
       .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (matchesData) setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    if (matchesData) {
+      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    }
 
-    // Récupération des disponibilités
     const { data: availData } = await supabase
       .from('availability')
       .select('match_id, user_id, status, selection_status')
@@ -103,7 +108,6 @@ export default function DashboardJoueur() {
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
-
     const match = matches.find(m => m.id === matchId)
     if (!match || match.composition_validated) return
 
