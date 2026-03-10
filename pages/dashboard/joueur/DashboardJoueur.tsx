@@ -79,20 +79,21 @@ export default function DashboardJoueur() {
     init()
   }, [])
 
-  // Récupérer les matchs et disponibilités
   const fetchMatchesAndAvailability = async (teamIds: string[]) => {
-    // Récupération des matchs du joueur (filtrés par teamId)
+    // ⚡ Récupération de tous les matchs pour les équipes du joueur
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
       .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (matchesData) setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    if (matchesData) {
+      // On force le team_id en string pour la comparaison stricte
+      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    }
 
-    // Récupération des disponibilités pour ces matchs
+    // Disponibilités pour ces matchs
     const matchIds = matchesData?.map(m => m.id) || []
-
     if (matchIds.length > 0) {
       const { data: availData } = await supabase
         .from('availability')
@@ -103,7 +104,6 @@ export default function DashboardJoueur() {
     }
   }
 
-  // Mettre à jour le statut du joueur
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
     const match = matches.find(m => m.id === matchId)
@@ -221,7 +221,8 @@ export default function DashboardJoueur() {
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard Joueur</h1>
 
       {teams.map(team => {
-        const teamMatches = matches.filter(m => m.team_id === team.id)
+        // ✅ Filtrage strict des matchs pour cette équipe
+        const teamMatches = matches.filter(m => String(m.team_id) === String(team.id))
         if (!teamMatches.length) return null
 
         const matchesEnAttente = teamMatches.filter(m => !m.composition_validated)
