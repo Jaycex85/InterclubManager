@@ -4,12 +4,10 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 import { MdSportsTennis } from 'react-icons/md'
-import { FaUsers } from 'react-icons/fa'
 
 const MatchForm = dynamic(() => import('./matches/EditMatch'), { ssr: false })
 const CompositionForm = dynamic(() => import('./matches/EditComposition'), { ssr: false })
 
-type Team = { id: string; name: string }
 type Match = {
   id: string
   team_id: string
@@ -21,162 +19,91 @@ type Match = {
   composition_validated: boolean
 }
 
-export default function DashboardCapitaine() {
-  const [teams, setTeams] = useState<Team[]>([])
+type Props = {
+  teamId: string
+  teamName: string
+}
+
+export default function DashboardCapitaine({ teamId, teamName }: Props) {
   const [matches, setMatches] = useState<Match[]>([])
-  const [openTeamId, setOpenTeamId] = useState<string | null>(null)
   const [openMatchId, setOpenMatchId] = useState<string | null>(null)
   const [openCompositionId, setOpenCompositionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchData = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session?.user) return
+    const fetchMatches = async () => {
+      const { data: matchData, error } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('team_id', teamId)
+        .order('match_date', { ascending: true })
 
-      const userId = session.user.id
-
-      // fetch captain teams
-      const { data: teamData, error: teamError } = await supabase
-        .from('team_memberships')
-        .select(`team_id, role, teams(id, name)`)
-        .eq('user_id', userId)
-        .eq('role', 'captain')
-
-      if (teamError) console.error(teamError)
-
-      if (teamData) {
-        const formattedTeams = teamData.map((m: any) => ({
-          id: m.team_id,
-          name: m.teams.name,
-        }))
-        setTeams(formattedTeams)
-      }
-
-      // fetch matches for these teams
-      if (teamData?.length) {
-        const teamIds = teamData.map((t: any) => t.team_id)
-        const { data: matchData, error: matchError } = await supabase
-          .from('matches')
-          .select('*')
-          .in('team_id', teamIds)
-          .order('match_date', { ascending: true })
-
-        if (matchError) console.error(matchError)
-        if (matchData) setMatches(matchData)
-      }
-
+      if (error) console.error(error)
+      setMatches(matchData || [])
       setLoading(false)
     }
 
-    fetchData()
-  }, [])
+    fetchMatches()
+  }, [teamId])
 
-  if (loading)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-        Chargement...
-      </div>
-    )
+  if (loading) return <div>Chargement...</div>
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6 text-center md:text-left">
-        Dashboard Capitaine
-      </h1>
+    <div className="border border-gray-700 rounded overflow-hidden">
+      <div className="p-4 bg-gray-800 font-bold flex items-center">
+        <MdSportsTennis className="mr-2" /> {teamName}
+      </div>
 
-      {teams.length === 0 ? (
-        <div className="text-gray-400">Vous n’êtes capitaine d’aucune équipe pour l’instant.</div>
-      ) : (
-        <div className="space-y-4">
-          {teams.map((team) => (
-            <div key={team.id} className="border border-gray-700 rounded overflow-hidden">
-              <button
-                className="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 font-bold flex justify-between items-center"
-                onClick={() => setOpenTeamId(openTeamId === team.id ? null : team.id)}
-              >
-                <span className="flex items-center">
-                  <MdSportsTennis className="mr-2" /> {team.name}
-                </span>
-                <span
-                  className={`ml-2 transform transition-transform duration-300 ${
-                    openTeamId === team.id ? 'rotate-180' : ''
-                  }`}
+      <div className="p-4 grid gap-2">
+        <button
+          className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded font-bold w-max mb-2"
+          onClick={() => setOpenMatchId('new')}
+        >
+          + Ajouter un match
+        </button>
+
+        {matches.length === 0 && <div className="text-gray-400">Aucun match pour cette équipe</div>}
+
+        {matches.map((m) => (
+          <div key={m.id} className="flex justify-between items-center bg-gray-700 hover:bg-gray-600 rounded p-2">
+            <div>
+              {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
+              {m.clubaddress && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-2 text-blue-400 underline"
                 >
-                  ▼
-                </span>
-              </button>
-
-              {openTeamId === team.id && (
-                <div className="p-4 grid gap-2">
-                  {/* -------- Bouton Ajouter un match -------- */}
-                  <button
-                    className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded font-bold w-max mb-2"
-                    onClick={() => setOpenMatchId('new')}
-                  >
-                    + Ajouter un match
-                  </button>
-
-                  {/* -------- Liste des matchs -------- */}
-                  {matches
-                    .filter((m) => m.team_id === team.id)
-                    .map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex justify-between items-center bg-gray-700 hover:bg-gray-600 rounded p-2"
-                      >
-                        <div>
-                          {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
-                          {m.clubaddress && (
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                                m.clubaddress
-                              )}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="ml-2 text-blue-400 underline"
-                            >
-                              📍
-                            </a>
-                          )}
-                        </div>
-                        <div className="space-x-2">
-                          <button
-                            className={`px-2 py-1 rounded ${
-                              m.composition_validated
-                                ? 'bg-green-600 hover:bg-green-500'
-                                : 'bg-yellow-500 hover:bg-yellow-400'
-                            } font-bold`}
-                            onClick={() => setOpenMatchId(m.id)}
-                          >
-                            Editer Match
-                          </button>
-                          <button
-                            className="px-2 py-1 bg-blue-500 hover:bg-blue-400 rounded font-bold"
-                            onClick={() => setOpenCompositionId(m.id)}
-                          >
-                            Composition
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
+                  📍
+                </a>
               )}
             </div>
-          ))}
-        </div>
-      )}
+            <div className="space-x-2">
+              <button
+                className={`px-2 py-1 rounded ${
+                  m.composition_validated ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-500 hover:bg-yellow-400'
+                } font-bold`}
+                onClick={() => setOpenMatchId(m.id)}
+              >
+                Editer Match
+              </button>
+              <button
+                className="px-2 py-1 bg-blue-500 hover:bg-blue-400 rounded font-bold"
+                onClick={() => setOpenCompositionId(m.id)}
+              >
+                Composition
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* -------- Modal Match -------- */}
+      {/* Modal Match */}
       {openMatchId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
-            <button
-              className="mb-4 text-red-400 hover:text-red-600 font-bold"
-              onClick={() => setOpenMatchId(null)}
-            >
+            <button className="mb-4 text-red-400 hover:text-red-600 font-bold" onClick={() => setOpenMatchId(null)}>
               Fermer ✕
             </button>
             <MatchForm
@@ -187,13 +114,13 @@ export default function DashboardCapitaine() {
                 setTimeout(() => setLoading(false), 100)
               }}
               onClose={() => setOpenMatchId(null)}
-              teamId={openMatchId === 'new' ? openTeamId! : undefined}
+              teamId={openMatchId === 'new' ? teamId : undefined}
             />
           </div>
         </div>
       )}
 
-      {/* -------- Modal Composition -------- */}
+      {/* Modal Composition */}
       {openCompositionId && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
