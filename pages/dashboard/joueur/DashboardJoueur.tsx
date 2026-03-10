@@ -3,9 +3,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../utils/supabaseClient'
 
-type Team = {
-  id: string
-  name: string
+export type DashboardJoueurProps = {
+  teamId: string
 }
 
 type Match = {
@@ -40,8 +39,7 @@ type ModalData = {
   composition: ModalPlayer[]
 }
 
-export default function DashboardJoueur() {
-  const [teams, setTeams] = useState<Team[]>([])
+export default function DashboardJoueur({ teamId }: DashboardJoueurProps) {
   const [matches, setMatches] = useState<Match[]>([])
   const [availability, setAvailability] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,50 +52,34 @@ export default function DashboardJoueur() {
       if (!user) return
       setUserId(user.id)
 
-      // 1️⃣ Récupérer les équipes du joueur
-      const { data: memberships } = await supabase
-        .from('team_memberships')
-        .select('team_id')
-        .eq('user_id', user.id)
+      // 1️⃣ Récupérer les matchs de l'équipe
+      const { data: matchesData } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('team_id', teamId)
+        .order('match_date', { ascending: true })
 
-      const teamIds = memberships?.map(m => String(m.team_id)) || []
-
-      // 2️⃣ Récupérer les noms des équipes
-      const { data: teamsData } = await supabase
-        .from('teams')
-        .select('id, name')
-        .in('id', teamIds)
-
-      const userTeams: Team[] = teamsData?.map(t => ({ id: t.id, name: t.name })) || []
-      setTeams(userTeams)
-
-      // 3️⃣ Récupérer tous les matchs en **un seul fetch**
-      if (teamIds.length > 0) {
-        const { data: matchesData } = await supabase
-          .from('matches')
-          .select('*')
-          .in('team_id', teamIds)
-          .order('match_date', { ascending: true })
-
-        const allMatches = matchesData?.map(m => ({ ...m, team_id: String(m.team_id) })) || []
-        setMatches(allMatches)
-
-        // 4️⃣ Récupérer toutes les disponibilités liées aux matchs
-        const matchIds = allMatches.map(m => m.id)
-        if (matchIds.length > 0) {
-          const { data: availData } = await supabase
-            .from('availability')
-            .select('*')
-            .in('match_id', matchIds)
-          if (availData) setAvailability(availData)
-        }
+      if (!matchesData || matchesData.length === 0) {
+        setLoading(false)
+        return
       }
 
+      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+
+      // 2️⃣ Récupérer les disponibilités du joueur pour ces matchs
+      const matchIds = matchesData.map(m => m.id)
+      const { data: availData } = await supabase
+        .from('availability')
+        .select('match_id, user_id, status, selection_status')
+        .in('match_id', matchIds)
+        .eq('user_id', user.id)
+
+      if (availData) setAvailability(availData)
       setLoading(false)
     }
 
     init()
-  }, [])
+  }, [teamId])
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
@@ -210,50 +192,12 @@ export default function DashboardJoueur() {
   }
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
+  if (matches.length === 0) return <div>Aucun match pour cette équipe.</div>
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
-      <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard Joueur</h1>
-
-      {teams.map(team => {
-        // 🔹 Filtrer uniquement les matchs correspondant à cette équipe
-        const teamMatches = matches.filter(m => m.team_id === team.id)
-        if (!teamMatches.length) return null
-
-        const matchesEnAttente = teamMatches.filter(m => !m.composition_validated)
-        const mesMatchs = teamMatches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
-        const autresMatchs = teamMatches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
-
-        return (
-          <div key={team.id} className="space-y-4">
-            <h2 className="text-2xl font-bold text-indigo-400">{team.name}</h2>
-
-            {matchesEnAttente.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-orange-400">Matchs en attente</h3>
-                {matchesEnAttente.map(m => renderMatch(m, true))}
-              </div>
-            )}
-
-            {mesMatchs.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-green-400">Mes matchs</h3>
-                {mesMatchs.map(m => renderMatch(m, false))}
-              </div>
-            )}
-
-            {autresMatchs.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-red-400">Autres matchs</h3>
-                {autresMatchs.map(m => renderMatch(m, false))}
-              </div>
-            )}
-          </div>
-        )
-      })}
-
-      {matches.length === 0 && <div>Aucun match pour le moment</div>}
-
+    <div className="space-y-4">
+      {matches.map(m => renderMatch(m, !m.composition_validated))}
+      
       {modal.visible && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
