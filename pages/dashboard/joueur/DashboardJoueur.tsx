@@ -45,11 +45,7 @@ export default function DashboardJoueur() {
   const [matches, setMatches] = useState<Match[]>([])
   const [availability, setAvailability] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<ModalData>({
-    visible: false,
-    matchName: '',
-    composition: []
-  })
+  const [modal, setModal] = useState<ModalData>({ visible: false, matchName: '', composition: [] })
   const [userId, setUserId] = useState<string>('')
 
   useEffect(() => {
@@ -58,54 +54,56 @@ export default function DashboardJoueur() {
       if (!user) return
       setUserId(user.id)
 
-      // 1️⃣ Récupérer les memberships et le nom de l'équipe
+      // 1️⃣ Récupérer les équipes du joueur
       const { data: memberships } = await supabase
         .from('team_memberships')
-        .select('team_id, teams(name)')
+        .select('team_id')
         .eq('user_id', user.id)
 
-      if (!memberships) return
+      const teamIds = memberships?.map(m => m.team_id) || []
 
-      // 2️⃣ Construire les équipes uniques
-      const userTeams: Team[] = memberships
-        .map(m => ({
-          id: String(m.team_id),
-          name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
-        }))
-        .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i) // supprimer doublons
+      // 2️⃣ Récupérer les noms des équipes
+      const { data: teamsData } = await supabase
+        .from('teams')
+        .select('id, name')
+        .in('id', teamIds)
 
+      const userTeams: Team[] = teamsData?.map(t => ({ id: t.id, name: t.name })) || []
       setTeams(userTeams)
 
-      const teamIds = userTeams.map(t => t.id)
-      if (teamIds.length > 0) {
-        await fetchData(teamIds)
-      }
+      if (teamIds.length > 0) await fetchMatchesAndAvailability(teamIds)
 
       setLoading(false)
     }
+
     init()
   }, [])
 
-  const fetchData = async (teamIds: string[]) => {
-    // récupérer uniquement les matchs des équipes de l'utilisateur
+  // Récupérer les matchs et disponibilités
+  const fetchMatchesAndAvailability = async (teamIds: string[]) => {
+    // Récupération des matchs du joueur (filtrés par teamId)
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
       .in('team_id', teamIds)
       .order('match_date', { ascending: true })
 
-    if (matchesData) {
-      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    if (matchesData) setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+
+    // Récupération des disponibilités pour ces matchs
+    const matchIds = matchesData?.map(m => m.id) || []
+
+    if (matchIds.length > 0) {
+      const { data: availData } = await supabase
+        .from('availability')
+        .select('match_id, user_id, status, selection_status')
+        .in('match_id', matchIds)
+
+      if (availData) setAvailability(availData)
     }
-
-    const { data: availData } = await supabase
-      .from('availability')
-      .select('match_id, user_id, status, selection_status')
-      .in('match_id', matchesData?.map(m => m.id) || [])
-
-    if (availData) setAvailability(availData)
   }
 
+  // Mettre à jour le statut du joueur
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
     const match = matches.find(m => m.id === matchId)
@@ -125,13 +123,11 @@ export default function DashboardJoueur() {
         .insert({ match_id: matchId, user_id: userId, status })
     }
 
-    setAvailability(prev => {
-      if (existing) {
-        return prev.map(a => a.match_id === matchId && a.user_id === userId ? { ...a, status } : a)
-      } else {
-        return [...prev, { match_id: matchId, user_id: userId, status, selection_status: null }]
-      }
-    })
+    setAvailability(prev =>
+      existing
+        ? prev.map(a => (a.match_id === matchId && a.user_id === userId ? { ...a, status } : a))
+        : [...prev, { match_id: matchId, user_id: userId, status, selection_status: null }]
+    )
   }
 
   const getStatus = (matchId: string) =>
