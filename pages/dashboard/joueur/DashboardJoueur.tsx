@@ -60,7 +60,7 @@ export default function DashboardJoueur() {
         .select('team_id')
         .eq('user_id', user.id)
 
-      const teamIds = memberships?.map(m => m.team_id) || []
+      const teamIds = memberships?.map(m => String(m.team_id)) || []
 
       // 2️⃣ Récupérer les noms des équipes
       const { data: teamsData } = await supabase
@@ -71,7 +71,8 @@ export default function DashboardJoueur() {
       const userTeams: Team[] = teamsData?.map(t => ({ id: t.id, name: t.name })) || []
       setTeams(userTeams)
 
-      if (teamIds.length > 0) await fetchMatchesAndAvailability(teamIds)
+      // 3️⃣ Récupérer les matchs et disponibilités, **par équipe**
+      if (teamIds.length > 0) await fetchMatchesAndAvailabilityByTeam(teamIds)
 
       setLoading(false)
     }
@@ -79,31 +80,38 @@ export default function DashboardJoueur() {
     init()
   }, [])
 
-  const fetchMatchesAndAvailability = async (teamIds: string[]) => {
-    // ⚡ Récupération de tous les matchs pour les équipes du joueur
-    const { data: matchesData } = await supabase
-      .from('matches')
-      .select('*')
-      .in('team_id', teamIds)
-      .order('match_date', { ascending: true })
+  // 🔹 Fetch matchs et disponibilités par équipe
+  const fetchMatchesAndAvailabilityByTeam = async (teamIds: string[]) => {
+    const allMatches: Match[] = []
+    const allAvailability: Availability[] = []
 
-    if (matchesData) {
-      // On force le team_id en string pour la comparaison stricte
-      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
+    for (const teamId of teamIds) {
+      const { data: teamMatches } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('team_id', teamId)
+        .order('match_date', { ascending: true })
+
+      if (teamMatches?.length) {
+        const matchesWithStringId = teamMatches.map(m => ({ ...m, team_id: String(m.team_id) }))
+        allMatches.push(...matchesWithStringId)
+
+        const matchIds = matchesWithStringId.map(m => m.id)
+        if (matchIds.length > 0) {
+          const { data: availData } = await supabase
+            .from('availability')
+            .select('*')
+            .in('match_id', matchIds)
+          if (availData?.length) allAvailability.push(...availData)
+        }
+      }
     }
 
-    // Disponibilités pour ces matchs
-    const matchIds = matchesData?.map(m => m.id) || []
-    if (matchIds.length > 0) {
-      const { data: availData } = await supabase
-        .from('availability')
-        .select('match_id, user_id, status, selection_status')
-        .in('match_id', matchIds)
-
-      if (availData) setAvailability(availData)
-    }
+    setMatches(allMatches)
+    setAvailability(allAvailability)
   }
 
+  // 🔹 Mettre à jour le statut du joueur
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
     const match = matches.find(m => m.id === matchId)
@@ -221,8 +229,7 @@ export default function DashboardJoueur() {
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard Joueur</h1>
 
       {teams.map(team => {
-        // ✅ Filtrage strict des matchs pour cette équipe
-        const teamMatches = matches.filter(m => String(m.team_id) === String(team.id))
+        const teamMatches = matches.filter(m => m.team_id === team.id)
         if (!teamMatches.length) return null
 
         const matchesEnAttente = teamMatches.filter(m => !m.composition_validated)
