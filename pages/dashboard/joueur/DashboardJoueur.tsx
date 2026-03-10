@@ -64,9 +64,10 @@ export default function DashboardJoueur() {
         .select('team_id, teams!inner(name)')
         .eq('user_id', user.id)
 
+      // Corrige l'accès à `teams[0]` car Supabase renvoie un tableau
       const userTeams: Team[] = memberships?.map(m => ({
         id: String(m.team_id),
-        name: m.teams?.name || `Équipe ${m.team_id}`
+        name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
       })) || []
 
       setTeams(userTeams)
@@ -82,7 +83,7 @@ export default function DashboardJoueur() {
   }, [])
 
   const fetchData = async (teamIds: string[]) => {
-    // Récupération des matchs
+    // Récupération des matchs pour toutes les équipes de l'utilisateur
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
