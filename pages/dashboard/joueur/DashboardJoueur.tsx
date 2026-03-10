@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../utils/supabaseClient'
 
+type Team = {
+  id: string
+  name: string
+}
+
 type Match = {
   id: string
+  team_id: string
   opponent: string
   match_date: string
   match_time: string
@@ -35,6 +41,7 @@ type ModalData = {
 }
 
 export default function DashboardJoueur() {
+  const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [availability, setAvailability] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,35 +50,40 @@ export default function DashboardJoueur() {
     matchName: '',
     composition: []
   })
-
   const [userId, setUserId] = useState<string>('')
 
+  // Récupération de l'utilisateur et des équipes
   useEffect(() => {
-    const fetchUser = async () => {
+    const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      setUserId(user?.id || '')
+      if (!user) return
+      setUserId(user.id)
+
+      // Récupérer les équipes avec leur nom
+      const { data: memberships } = await supabase
+        .from('team_memberships')
+        .select('team_id, teams(name)')
+        .eq('user_id', user.id)
+
+      const userTeams: Team[] = memberships?.map(m => ({
+        id: m.team_id,
+        name: m.teams?.name || `Équipe ${m.team_id}`
+      })) || []
+
+      setTeams(userTeams)
+
+      const teamIds = userTeams.map(t => t.id)
+      if (teamIds.length > 0) {
+        await fetchData(teamIds, user.id)
+      }
+
+      setLoading(false)
     }
-    fetchUser()
-    fetchData()
+    init()
   }, [])
 
-  const fetchData = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.user) return
-
-    const userId = session.user.id
-
-    const { data: memberships } = await supabase
-      .from('team_memberships')
-      .select('team_id')
-      .eq('user_id', userId)
-
-    const teamIds = memberships?.map(m => m.team_id) || []
-    if (!teamIds.length) {
-      setLoading(false)
-      return
-    }
-
+  const fetchData = async (teamIds: string[], uid: string) => {
+    // Récupération des matchs
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
@@ -80,14 +92,13 @@ export default function DashboardJoueur() {
 
     if (matchesData) setMatches(matchesData)
 
+    // Récupération des disponibilités
     const { data: availData } = await supabase
       .from('availability')
       .select('match_id, user_id, status, selection_status')
       .in('match_id', matchesData?.map(m => m.id) || [])
 
     if (availData) setAvailability(availData)
-
-    setLoading(false)
   }
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
@@ -110,23 +121,19 @@ export default function DashboardJoueur() {
         .insert({ match_id: matchId, user_id: userId, status })
     }
 
-    fetchData()
+    setAvailability(prev => {
+      if (existing) {
+        return prev.map(a => a.match_id === matchId && a.user_id === userId ? { ...a, status } : a)
+      } else {
+        return [...prev, { match_id: matchId, user_id: userId, status, selection_status: null }]
+      }
+    })
   }
 
-  const getStatus = (matchId: string, userId: string) =>
+  const getStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
-  const getSelectionStatus = (matchId: string, userId: string) =>
+  const getSelectionStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
-
-  if (loading) return <div className="text-white p-6">Chargement...</div>
-
-  const matchesEnAttente = matches.filter(m => !m.composition_validated)
-  const mesMatchs = matches.filter(m =>
-    m.composition_validated && getSelectionStatus(m.id, userId) === 'selected'
-  )
-  const autresMatchs = matches.filter(m =>
-    m.composition_validated && getSelectionStatus(m.id, userId) !== 'selected'
-  )
 
   const showComposition = async (matchId: string, matchName: string) => {
     const { data } = await supabase
@@ -148,8 +155,8 @@ export default function DashboardJoueur() {
   }
 
   const renderMatch = (m: Match, editable: boolean) => {
-    const status = getStatus(m.id, userId)
-    const selection = getSelectionStatus(m.id, userId)
+    const status = getStatus(m.id)
+    const selection = getSelectionStatus(m.id)
 
     return (
       <div key={m.id} className="p-4 rounded border border-gray-700 bg-gray-800">
@@ -189,9 +196,7 @@ export default function DashboardJoueur() {
           </div>
         )}
 
-        {status && (
-          <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>
-        )}
+        {status && <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>}
 
         {m.composition_validated && (
           <div className="mt-2 flex items-center gap-2">
@@ -210,30 +215,51 @@ export default function DashboardJoueur() {
     )
   }
 
+  if (loading) return <div className="text-white p-6">Chargement...</div>
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6 space-y-6">
       <h1 className="text-3xl font-bold text-yellow-400 mb-6">Dashboard Joueur</h1>
 
-      {matchesEnAttente.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-orange-400">Matchs en attente</h2>
-          {matchesEnAttente.map(m => renderMatch(m, true))}
-        </div>
-      )}
+      {teams.map(team => {
+        const teamMatches = matches.filter(m => m.team_id === team.id)
+        if (!teamMatches.length) return null
 
-      {mesMatchs.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-green-400">Mes matchs</h2>
-          {mesMatchs.map(m => renderMatch(m, false))}
-        </div>
-      )}
+        const matchesEnAttente = teamMatches.filter(m => !m.composition_validated)
+        const mesMatchs = teamMatches.filter(m =>
+          m.composition_validated && getSelectionStatus(m.id) === 'selected'
+        )
+        const autresMatchs = teamMatches.filter(m =>
+          m.composition_validated && getSelectionStatus(m.id) !== 'selected'
+        )
 
-      {autresMatchs.length > 0 && (
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-red-400">Autres matchs</h2>
-          {autresMatchs.map(m => renderMatch(m, false))}
-        </div>
-      )}
+        return (
+          <div key={team.id} className="space-y-4">
+            <h2 className="text-2xl font-bold text-indigo-400">{team.name}</h2>
+
+            {matchesEnAttente.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-orange-400">Matchs en attente</h3>
+                {matchesEnAttente.map(m => renderMatch(m, true))}
+              </div>
+            )}
+
+            {mesMatchs.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-green-400">Mes matchs</h3>
+                {mesMatchs.map(m => renderMatch(m, false))}
+              </div>
+            )}
+
+            {autresMatchs.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-red-400">Autres matchs</h3>
+                {autresMatchs.map(m => renderMatch(m, false))}
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       {matches.length === 0 && <div>Aucun match pour le moment</div>}
 
