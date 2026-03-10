@@ -3,10 +3,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../../utils/supabaseClient'
 
-export type DashboardJoueurProps = {
-  teamId: string
-}
-
 type Match = {
   id: string
   team_id: string
@@ -39,7 +35,11 @@ type ModalData = {
   composition: ModalPlayer[]
 }
 
-export default function DashboardJoueur({ teamId }: DashboardJoueurProps) {
+type Props = {
+  teamId: string
+}
+
+export default function DashboardJoueur({ teamId }: Props) {
   const [matches, setMatches] = useState<Match[]>([])
   const [availability, setAvailability] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,32 +52,27 @@ export default function DashboardJoueur({ teamId }: DashboardJoueurProps) {
       if (!user) return
       setUserId(user.id)
 
-      // 1️⃣ Récupérer les matchs de l'équipe
+      // Fetch matches and availability for this team
       const { data: matchesData } = await supabase
         .from('matches')
         .select('*')
         .eq('team_id', teamId)
         .order('match_date', { ascending: true })
 
-      if (!matchesData || matchesData.length === 0) {
-        setLoading(false)
-        return
+      const matchList = matchesData?.map(m => ({ ...m, team_id: String(m.team_id) })) || []
+      setMatches(matchList)
+
+      const matchIds = matchList.map(m => m.id)
+      if (matchIds.length > 0) {
+        const { data: availData } = await supabase
+          .from('availability')
+          .select('match_id, user_id, status, selection_status')
+          .in('match_id', matchIds)
+        setAvailability(availData || [])
       }
 
-      setMatches(matchesData.map(m => ({ ...m, team_id: String(m.team_id) })))
-
-      // 2️⃣ Récupérer les disponibilités du joueur pour ces matchs
-      const matchIds = matchesData.map(m => m.id)
-      const { data: availData } = await supabase
-        .from('availability')
-        .select('match_id, user_id, status, selection_status')
-        .in('match_id', matchIds)
-        .eq('user_id', user.id)
-
-      if (availData) setAvailability(availData)
       setLoading(false)
     }
-
     init()
   }, [teamId])
 
@@ -87,7 +82,6 @@ export default function DashboardJoueur({ teamId }: DashboardJoueurProps) {
     if (!match || match.composition_validated) return
 
     const existing = availability.find(a => a.match_id === matchId && a.user_id === userId)
-
     if (existing) {
       await supabase
         .from('availability')
@@ -192,12 +186,37 @@ export default function DashboardJoueur({ teamId }: DashboardJoueurProps) {
   }
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
-  if (matches.length === 0) return <div>Aucun match pour cette équipe.</div>
+
+  // Catégorisation des matchs
+  const matchesEnAttente = matches.filter(m => !m.composition_validated)
+  const mesMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
+  const autresMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
 
   return (
-    <div className="space-y-4">
-      {matches.map(m => renderMatch(m, !m.composition_validated))}
-      
+    <div className="space-y-6">
+      {matchesEnAttente.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-orange-400">Matchs en attente</h3>
+          {matchesEnAttente.map(m => renderMatch(m, true))}
+        </div>
+      )}
+
+      {mesMatchs.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-green-400">Mes matchs</h3>
+          {mesMatchs.map(m => renderMatch(m, false))}
+        </div>
+      )}
+
+      {autresMatchs.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xl font-bold text-red-400">Autres matchs</h3>
+          {autresMatchs.map(m => renderMatch(m, false))}
+        </div>
+      )}
+
+      {matches.length === 0 && <div>Aucun match pour le moment</div>}
+
       {modal.visible && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
