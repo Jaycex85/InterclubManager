@@ -185,7 +185,10 @@ export default function DashboardIndex() {
                 </button>
                 <div className={`transition-all duration-500 overflow-hidden ${openPanel === panelKey ? "max-h-[5000px]" : "max-h-0"}`}>
                   {openPanel === panelKey && (
-                    <div className="p-4"><DashboardJoueur /></div>
+                    <div className="p-4">
+                      {/* 🔑 On passe maintenant teamId */}
+                      <DashboardJoueur teamId={t.team_id} />
+                    </div>
                   )}
                 </div>
               </div>
