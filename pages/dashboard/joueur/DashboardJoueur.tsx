@@ -52,14 +52,14 @@ export default function DashboardJoueur() {
   })
   const [userId, setUserId] = useState<string>('')
 
-  // Récupération de l'utilisateur et des équipes
+  // Initialisation : utilisateur et équipes
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
 
-      // Récupérer les équipes avec leur nom
+      // Récupérer les équipes avec nom
       const { data: memberships } = await supabase
         .from('team_memberships')
         .select('team_id, teams(name)')
@@ -67,7 +67,7 @@ export default function DashboardJoueur() {
 
       const userTeams: Team[] = memberships?.map(m => ({
         id: m.team_id,
-        name: m.teams?.name || `Équipe ${m.team_id}`
+        name: m.teams?.[0]?.name || `Équipe ${m.team_id}`
       })) || []
 
       setTeams(userTeams)
@@ -82,8 +82,8 @@ export default function DashboardJoueur() {
     init()
   }, [])
 
+  // Récupération des matchs et disponibilités
   const fetchData = async (teamIds: string[], uid: string) => {
-    // Récupération des matchs
     const { data: matchesData } = await supabase
       .from('matches')
       .select('*')
@@ -92,7 +92,6 @@ export default function DashboardJoueur() {
 
     if (matchesData) setMatches(matchesData)
 
-    // Récupération des disponibilités
     const { data: availData } = await supabase
       .from('availability')
       .select('match_id, user_id, status, selection_status')
@@ -101,6 +100,7 @@ export default function DashboardJoueur() {
     if (availData) setAvailability(availData)
   }
 
+  // Mise à jour de la disponibilité
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
     if (!userId) return
 
@@ -121,6 +121,7 @@ export default function DashboardJoueur() {
         .insert({ match_id: matchId, user_id: userId, status })
     }
 
+    // Mise à jour locale
     setAvailability(prev => {
       if (existing) {
         return prev.map(a => a.match_id === matchId && a.user_id === userId ? { ...a, status } : a)
@@ -132,9 +133,11 @@ export default function DashboardJoueur() {
 
   const getStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
+
   const getSelectionStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
+  // Affichage du modal composition
   const showComposition = async (matchId: string, matchName: string) => {
     const { data } = await supabase
       .from('availability')
@@ -154,6 +157,7 @@ export default function DashboardJoueur() {
     }
   }
 
+  // Carte de match
   const renderMatch = (m: Match, editable: boolean) => {
     const status = getStatus(m.id)
     const selection = getSelectionStatus(m.id)
