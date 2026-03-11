@@ -171,10 +171,22 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                 {/* Forms */}
                 {(roles.admin || roles.club_admin) && (
                   <div className="flex flex-col gap-2 mt-2">
-                    <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users.filter(u =>
-                      roles.admin ? true : clubMemberships.some(cm => cm.club_id === team.club_id)
-                    )} />
-                    <AssignCaptainForm team={team} members={members} setMembers={setMembers} usersById={usersById} />
+                    <AddPlayerForm
+                      team={team}
+                      members={members}
+                      setMembers={setMembers}
+                      users={users.filter(u => roles.admin ? true : clubMemberships.some(cm => cm.club_id === team.club_id))}
+                      roles={roles}
+                      clubMemberships={clubMemberships}
+                    />
+                    <AssignCaptainForm
+                      team={team}
+                      members={members}
+                      setMembers={setMembers}
+                      usersById={usersById}
+                      roles={roles}
+                      clubMemberships={clubMemberships}
+                    />
                   </div>
                 )}
               </div>
@@ -209,7 +221,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ------------------- Team Form (dans le modal) -------------------
+// ------------------- Team Form -------------------
 function TeamForm({
   roles,
   clubMemberships,
@@ -241,7 +253,6 @@ function TeamForm({
 
   const handleSubmit = async () => {
     const payload = { name, category, gender, club_id: clubId, captain_id: captainId }
-
     if (isNew) {
       const { data, error } = await supabase.from("teams").insert([payload]).select().single()
       if (!error && data) onSaved()
@@ -257,12 +268,10 @@ function TeamForm({
         <label className="block mb-1">Nom</label>
         <input className="w-full p-2 rounded bg-gray-700 text-white" value={name} onChange={e => setName(e.target.value)} />
       </div>
-
       <div>
         <label className="block mb-1">Catégorie</label>
         <input className="w-full p-2 rounded bg-gray-700 text-white" value={category} onChange={e => setCategory(e.target.value)} />
       </div>
-
       <div>
         <label className="block mb-1">Genre</label>
         <select className="w-full p-2 rounded bg-gray-700 text-white" value={gender} onChange={e => setGender(e.target.value)}>
@@ -272,7 +281,6 @@ function TeamForm({
           <option value="Mixte">Mixte</option>
         </select>
       </div>
-
       {roles.admin && (
         <div>
           <label className="block mb-1">Club</label>
@@ -281,7 +289,6 @@ function TeamForm({
           </select>
         </div>
       )}
-
       <div>
         <label className="block mb-1">Capitaine</label>
         <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
@@ -289,14 +296,12 @@ function TeamForm({
           {clubPlayers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} - {u.email}</option>)}
         </select>
       </div>
-
       <div className="flex justify-end gap-2 mt-2">
         <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white font-bold" onClick={handleSubmit}>{isNew ? "Créer" : "Enregistrer"}</button>
       </div>
     </div>
   )
 }
-
 
 // ---------------------- Add Player Form ----------------------
 function AddPlayerForm({
@@ -306,27 +311,16 @@ function AddPlayerForm({
   users,
   roles,
   clubMemberships
-}: 
-                      <AddPlayerForm 
-  team={team} 
-  members={members} 
-  setMembers={setMembers} 
-  users={users.filter(u => roles.admin ? true : clubMemberships.some(cm => cm.club_id === team.club_id))} 
-  roles={roles} 
-  clubMemberships={clubMemberships} 
-/>
-
-<AssignCaptainForm 
-  team={team} 
-  members={members} 
-  setMembers={setMembers} 
-  usersById={usersById} 
-  roles={roles} 
-  clubMemberships={clubMemberships} 
-/>) {
+}: {
+  team: Team
+  members: TeamMember[]
+  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  users: ClubUser[]
+  roles: Roles
+  clubMemberships: ClubMembership[]
+}) {
   const [selectedUserId, setSelectedUserId] = useState("")
 
-  // Filtre les joueurs disponibles selon le club et déjà dans l'équipe
   const availableUsers = users.filter(u =>
     (!members.some(m => m.team_id === team.id && m.user_id === u.id)) &&
     (roles.admin || clubMemberships.some(cm => cm.club_id === team.club_id))
@@ -374,7 +368,6 @@ function AssignCaptainForm({
 }) {
   const [selectedCaptainId, setSelectedCaptainId] = useState("")
 
-  // Tous les joueurs de l'équipe filtrés selon rôle/club
   const teamPlayers = members.filter(m =>
     m.team_id === team.id &&
     (roles.admin || clubMemberships.some(cm => cm.club_id === team.club_id))
