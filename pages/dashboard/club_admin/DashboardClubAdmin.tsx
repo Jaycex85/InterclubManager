@@ -102,7 +102,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   // ------------------- Render -------------------
   return (
     <div className="space-y-6">
-      {/* Header + Nouvelle équipe */}
       {(roles.admin || roles.club_admin) && (
         <div className="flex justify-end">
           <button
@@ -114,7 +113,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         </div>
       )}
 
-      {/* Teams Grid */}
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {teams
           .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
@@ -122,7 +120,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
             const teamMembers = members.filter(m => m.team_id === team.id)
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
-                {/* Header */}
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-yellow-400 flex items-center gap-1">
                     <MdPeople /> {team.name}
@@ -139,7 +136,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
                 <p className="text-gray-300 text-sm mb-2">{team.category} - {team.gender}</p>
 
-                {/* Members */}
                 <div className="space-y-1 mb-2">
                   {teamMembers.map(tm => {
                     const user = usersById[tm.user_id]
@@ -167,7 +163,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                   })}
                 </div>
 
-                {/* Forms */}
                 {(roles.admin || roles.club_admin) && (
                   <div className="flex flex-col gap-2 mt-2">
                     <AddPlayerForm
@@ -193,7 +188,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           })}
       </div>
 
-      {/* Team Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md shadow-xl">
@@ -206,6 +200,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
               users={users}
               teamToEdit={teamToEdit}
               setTeamToEdit={setTeamToEdit}
+              setTeams={setTeams} // <- ajout
               onSaved={() => setIsModalOpen(false)}
             />
 
@@ -227,6 +222,7 @@ function TeamForm({
   users,
   teamToEdit,
   setTeamToEdit,
+  setTeams,
   onSaved
 }: {
   roles: Roles
@@ -235,26 +231,29 @@ function TeamForm({
   users: ClubUser[]
   teamToEdit?: Team
   setTeamToEdit: React.Dispatch<React.SetStateAction<Team|undefined>>
+  setTeams: React.Dispatch<React.SetStateAction<Team[]>>
   onSaved: () => void
 }) {
   const isNew = !teamToEdit
-
   const [name, setName] = useState(teamToEdit?.name || "")
   const [category, setCategory] = useState(teamToEdit?.category || "")
   const [gender, setGender] = useState(teamToEdit?.gender || "")
   const [clubId, setClubId] = useState(teamToEdit?.club_id || (roles.club_admin ? clubMemberships[0]?.club_id : allClubs[0]?.id) || "")
 
   const handleSubmit = async () => {
-    const payload = { name, category, gender, club_id: clubId } // Plus de captain_id
-
+    const payload = { name, category, gender, club_id: clubId }
     if (isNew) {
       const { data, error } = await supabase.from("teams").insert([payload]).select().single()
-      if (error) console.error("Erreur insert team:", error)
-      else onSaved()
+      if (!error && data) {
+        setTeams(prev => [...prev, data]) // <- ajout
+        onSaved()
+      } else console.error("Erreur insert team:", error)
     } else {
       const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit!.id).select()
-      if (error) console.error("Erreur update team:", error)
-      else onSaved()
+      if (!error && data?.length) {
+        setTeams(prev => prev.map(t => t.id === teamToEdit!.id ? data[0] : t)) // <- ajout
+        onSaved()
+      } else console.error("Erreur update team:", error)
     }
   }
 
@@ -322,7 +321,7 @@ function AddPlayerForm({
       .insert([{ team_id: team.id, user_id: selectedUserId, role: "player" }])
       .select()
     if (!error && data?.length) {
-      setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
+      setMembers(prev => [...prev, data[0]]) // <- mise à jour immédiate
       setSelectedUserId("")
     } else console.error("Erreur ajout joueur:", error)
   }
@@ -380,16 +379,16 @@ function AssignCaptainForm({
       .update({ role: "captain" })
       .eq("team_id", team.id)
       .eq("user_id", selectedCaptainId)
-    if (error) console.error("Erreur assign capitaine:", error)
-
-    setMembers(prev =>
-      prev.map(m =>
-        m.team_id === team.id
-          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
-          : m
+    if (!error) {
+      setMembers(prev =>
+        prev.map(m =>
+          m.team_id === team.id
+            ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
+            : m
+        )
       )
-    )
-    setSelectedCaptainId("")
+      setSelectedCaptainId("")
+    } else console.error("Erreur assign capitaine:", error)
   }
 
   return (
