@@ -49,6 +49,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   const [members, setMembers] = useState<TeamMember[]>([])
   const [users, setUsers] = useState<ClubUser[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [teamToEdit, setTeamToEdit] = useState<Team | undefined>(undefined)
 
   const usersById = useMemo(() => {
     const map: Record<string, ClubUser> = {}
@@ -123,23 +124,38 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
       {(roles.admin || roles.club_admin) && (
         <button
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setTeamToEdit(undefined); setIsModalOpen(true) }}
         >
           + Nouvelle équipe
         </button>
       )}
 
-      {/* Modal création équipe */}
+      {/* Modal création / édition équipe */}
       <TeamModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onCreate={async ({name, category, gender}) => {
-          const { data, error } = await supabase
-            .from("teams")
-            .insert({ name, category, gender, club_id: clubMemberships[0].club_id })
-            .select()
-            .single()
-          if (!error && data) setTeams(prev => [...prev, data])
+        teamToEdit={teamToEdit}
+        onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
+        onCreate={async ({id, name, category, gender}) => {
+          if (id) {
+            // MODIFICATION
+            const { data, error } = await supabase
+              .from("teams")
+              .update({ name, category, gender })
+              .eq("id", id)
+              .select()
+              .single()
+            if (!error && data) {
+              setTeams(prev => prev.map(t => t.id === id ? data : t))
+            }
+          } else {
+            // CRÉATION
+            const { data, error } = await supabase
+              .from("teams")
+              .insert({ name, category, gender, club_id: clubMemberships[0].club_id })
+              .select()
+              .single()
+            if (!error && data) setTeams(prev => [...prev, data])
+          }
         }}
       />
 
@@ -152,7 +168,17 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition">
-                <h2 className="text-lg font-bold text-yellow-400 mb-2">{team.name}</h2>
+                <div className="flex justify-between items-center mb-2">
+                  <h2 className="text-lg font-bold text-yellow-400">{team.name}</h2>
+                  {(roles.admin || roles.club_admin) && (
+                    <button
+                      className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-sm"
+                      onClick={() => { setTeamToEdit(team); setIsModalOpen(true) }}
+                    >
+                      Modifier
+                    </button>
+                  )}
+                </div>
                 <p className="text-gray-300 text-sm mb-2">{team.category} - {team.gender}</p>
 
                 {/* Membres */}
@@ -197,16 +223,24 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ------------------- Modal -------------------
-function TeamModal({ isOpen, onClose, onCreate }: { isOpen: boolean, onClose: () => void, onCreate: (team: {name: string, category: string, gender: string}) => void }) {
-  const [name, setName] = useState("")
-  const [category, setCategory] = useState("")
-  const [gender, setGender] = useState("")
+// ------------------- Modal création / édition équipe -------------------
+function TeamModal({ isOpen, onClose, onCreate, teamToEdit }: 
+  { isOpen: boolean, onClose: () => void, onCreate: (team: {id?: string, name: string, category: string, gender: string}) => void, teamToEdit?: Team }) {
+
+  const [name, setName] = useState(teamToEdit?.name || "")
+  const [category, setCategory] = useState(teamToEdit?.category || "")
+  const [gender, setGender] = useState(teamToEdit?.gender || "")
+
+  useEffect(() => {
+    setName(teamToEdit?.name || "")
+    setCategory(teamToEdit?.category || "")
+    setGender(teamToEdit?.gender || "")
+  }, [teamToEdit])
 
   if (!isOpen) return null
 
   const handleSubmit = () => {
-    onCreate({ name, category, gender })
+    onCreate({ id: teamToEdit?.id, name, category, gender })
     setName(""); setCategory(""); setGender("")
     onClose()
   }
@@ -214,19 +248,18 @@ function TeamModal({ isOpen, onClose, onCreate }: { isOpen: boolean, onClose: ()
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-800 p-6 rounded w-full max-w-md">
-        <h3 className="text-xl font-bold text-yellow-400 mb-4">Créer une nouvelle équipe</h3>
+        <h3 className="text-xl font-bold text-yellow-400 mb-4">{teamToEdit ? "Modifier l'équipe" : "Créer une nouvelle équipe"}</h3>
         <input className="w-full mb-2 p-2 rounded bg-gray-700 text-white" placeholder="Nom" value={name} onChange={e => setName(e.target.value)} />
         <input className="w-full mb-2 p-2 rounded bg-gray-700 text-white" placeholder="Catégorie" value={category} onChange={e => setCategory(e.target.value)} />
         <input className="w-full mb-4 p-2 rounded bg-gray-700 text-white" placeholder="Genre" value={gender} onChange={e => setGender(e.target.value)} />
         <div className="flex justify-end gap-2">
           <button className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500" onClick={onClose}>Annuler</button>
-          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700" onClick={handleSubmit}>Créer</button>
+          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700" onClick={handleSubmit}>{teamToEdit ? "Modifier" : "Créer"}</button>
         </div>
       </div>
     </div>
   )
 }
-
 
 // ---------------------- Add Player Form ----------------------
 function AddPlayerForm({
