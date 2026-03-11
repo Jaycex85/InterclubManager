@@ -296,3 +296,115 @@ function TeamForm({
     </div>
   )
 }
+
+
+// ---------------------- Add Player Form ----------------------
+function AddPlayerForm({
+  team,
+  members,
+  setMembers,
+  users,
+  roles,
+  clubMemberships
+}: {
+  team: Team
+  members: TeamMember[]
+  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  users: ClubUser[]
+  roles: Roles
+  clubMemberships: ClubMembership[]
+}) {
+  const [selectedUserId, setSelectedUserId] = useState("")
+
+  // Filtre les joueurs disponibles selon le club et déjà dans l'équipe
+  const availableUsers = users.filter(u =>
+    (!members.some(m => m.team_id === team.id && m.user_id === u.id)) &&
+    (roles.admin || clubMemberships.some(cm => cm.club_id === team.club_id))
+  )
+
+  const handleAdd = async () => {
+    if (!selectedUserId) return
+    const { error } = await supabase
+      .from("team_memberships")
+      .insert({ team_id: team.id, user_id: selectedUserId, role: "player" })
+    if (!error) {
+      setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
+      setSelectedUserId("")
+    }
+  }
+
+  return (
+    <div className="flex gap-2 flex-wrap">
+      <select className="bg-gray-700 text-white p-1 rounded" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+        <option value="">Sélectionner un joueur</option>
+        {availableUsers.map(u => (
+          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
+        ))}
+      </select>
+      <button className="bg-green-600 hover:bg-green-700 px-2 rounded" onClick={handleAdd}>Ajouter</button>
+    </div>
+  )
+}
+
+// ---------------------- Assign Captain Form ----------------------
+function AssignCaptainForm({
+  team,
+  members,
+  setMembers,
+  usersById,
+  roles,
+  clubMemberships
+}: {
+  team: Team
+  members: TeamMember[]
+  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  usersById: Record<string, ClubUser>
+  roles: Roles
+  clubMemberships: ClubMembership[]
+}) {
+  const [selectedCaptainId, setSelectedCaptainId] = useState("")
+
+  // Tous les joueurs de l'équipe filtrés selon rôle/club
+  const teamPlayers = members.filter(m =>
+    m.team_id === team.id &&
+    (roles.admin || clubMemberships.some(cm => cm.club_id === team.club_id))
+  )
+
+  const currentCaptain = teamPlayers.find(m => m.role === "captain")
+
+  const handleAssign = async () => {
+    if (!selectedCaptainId) return
+    if (currentCaptain) {
+      await supabase.from("team_memberships")
+        .update({ role: "player" })
+        .eq("team_id", team.id)
+        .eq("user_id", currentCaptain.user_id)
+    }
+    await supabase.from("team_memberships")
+      .update({ role: "captain" })
+      .eq("team_id", team.id)
+      .eq("user_id", selectedCaptainId)
+
+    setMembers(prev =>
+      prev.map(m =>
+        m.team_id === team.id
+          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
+          : m
+      )
+    )
+    setSelectedCaptainId("")
+  }
+
+  return (
+    <div className="flex gap-2 flex-wrap">
+      <select className="bg-gray-700 text-white p-1 rounded" value={selectedCaptainId} onChange={e => setSelectedCaptainId(e.target.value)}>
+        <option value="">Sélectionner capitaine</option>
+        {teamPlayers.map(m => {
+          const user = usersById[m.user_id]
+          return <option key={m.user_id} value={m.user_id}>{user ? `${user.first_name} ${user.last_name}` : m.user_id}</option>
+        })}
+      </select>
+      <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>Assigner</button>
+    </div>
+  )
+}
