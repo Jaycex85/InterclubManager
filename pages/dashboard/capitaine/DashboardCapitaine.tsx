@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '../../../utils/supabaseClient'
 import { MdSportsTennis } from 'react-icons/md'
+import { FiMapPin } from 'react-icons/fi'
 
 const MatchForm = dynamic(() => import('./matches/EditMatch'), { ssr: false })
 const CompositionForm = dynamic(() => import('./matches/EditComposition'), { ssr: false })
@@ -49,53 +50,57 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
   if (loading) return <div>Chargement...</div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center bg-gray-800 p-4 rounded shadow">
-        <MdSportsTennis className="mr-2 text-yellow-400" size={24} /> 
-        <h1 className="text-xl font-bold text-white">{teamName}</h1>
-      </div>
-
-      {/* Bouton Ajouter */}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between bg-gray-800 p-4 rounded-lg shadow-md">
+        <div className="flex items-center gap-2">
+          <MdSportsTennis className="text-yellow-400" size={28} />
+          <h1 className="text-2xl font-bold text-white">{teamName}</h1>
+        </div>
         <button
-          className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow"
+          className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold rounded shadow-md transition"
           onClick={() => setOpenMatchId('new')}
         >
           + Ajouter un match
         </button>
       </div>
 
-      {/* Liste des matchs */}
+      {/* Matches Grid */}
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {matches.length === 0 && <div className="text-gray-400">Aucun match pour cette équipe</div>}
+        {matches.length === 0 && (
+          <div className="text-gray-400 col-span-full text-center py-6">Aucun match pour cette équipe</div>
+        )}
 
         {matches.map((m) => (
           <div
             key={m.id}
-            className="bg-gray-700 hover:bg-gray-600 rounded shadow p-4 flex flex-col justify-between"
+            className="bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md p-4 flex flex-col justify-between transition"
           >
-            {/* Info match */}
+            {/* Match Info */}
             <div className="mb-3">
-              <p className="text-white font-semibold">{m.match_date} {m.match_time}</p>
-              <p className="text-gray-300">{m.opponent} ({m.location_type}) 
-                {m.clubaddress && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="ml-2 text-blue-400 underline"
-                  >
-                    📍
-                  </a>
-                )}
-              </p>
+              <p className="text-white font-semibold text-lg">{m.match_date} {m.match_time}</p>
+              <p className="text-gray-300 font-medium">{m.opponent} ({m.location_type})</p>
+              {m.clubaddress && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 text-blue-400 mt-1 font-medium"
+                >
+                  <FiMapPin /> Voir sur carte
+                </a>
+              )}
+              {m.composition_validated && (
+                <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">
+                  Composition validée
+                </span>
+              )}
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
+            <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-2">
               <button
-                className={`px-3 py-1 rounded font-bold ${
+                className={`px-3 py-1 rounded font-semibold transition ${
                   m.composition_validated
                     ? 'bg-green-600 hover:bg-green-500 text-white'
                     : 'bg-yellow-500 hover:bg-yellow-400 text-white'
@@ -105,7 +110,7 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
                 Editer Match
               </button>
               <button
-                className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-bold"
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-semibold transition"
                 onClick={() => setOpenCompositionId(m.id)}
               >
                 Composition
@@ -117,11 +122,12 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
 
       {/* Modal Match */}
       {openMatchId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
-            <button className="mb-4 text-red-400 hover:text-red-600 font-bold" onClick={() => setOpenMatchId(null)}>
-              Fermer ✕
-            </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg animate-fadeIn">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-yellow-400">Match</h2>
+              <button className="text-red-400 hover:text-red-600 font-bold" onClick={() => setOpenMatchId(null)}>✕</button>
+            </div>
             <MatchForm
               matchId={openMatchId === 'new' ? undefined : openMatchId}
               onSaved={() => {
@@ -138,14 +144,12 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
 
       {/* Modal Composition */}
       {openCompositionId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded shadow-lg w-full max-w-lg animate-fadeIn">
-            <button
-              className="mb-4 text-red-400 hover:text-red-600 font-bold"
-              onClick={() => setOpenCompositionId(null)}
-            >
-              Fermer ✕
-            </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg animate-fadeIn">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-yellow-400">Composition</h2>
+              <button className="text-red-400 hover:text-red-600 font-bold" onClick={() => setOpenCompositionId(null)}>✕</button>
+            </div>
             <CompositionForm
               matchId={openCompositionId}
               onSaved={() => {
