@@ -65,9 +65,7 @@ export default function MatchForm({ matchId, teamId, teamName, onSaved, onClose 
 
   return (
     <div>
-      <h3 className="text-lg font-bold text-yellow-400 mb-4">
-        {matchId ? 'Éditer le match' : `Nouveau match pour ${teamName}`}
-      </h3>
+      
 
       {loading ? (
         <p className="text-gray-300">Chargement...</p>
