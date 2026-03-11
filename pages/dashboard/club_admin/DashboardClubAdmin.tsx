@@ -156,6 +156,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                                 .eq("team_id", tm.team_id)
                                 .eq("user_id", tm.user_id)
                               if (!error) setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
+                              else console.error("Erreur suppr membre:", error)
                             }}
                           >
                             Supprimer
@@ -248,10 +249,12 @@ function TeamForm({
 
     if (isNew) {
       const { data, error } = await supabase.from("teams").insert([payload]).select().single()
-      if (!error && data) onSaved()
+      if (error) console.error("Erreur insert team:", error)
+      else onSaved()
     } else {
-      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit!.id)
-      if (!error && data) onSaved()
+      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit!.id).select()
+      if (error) console.error("Erreur update team:", error)
+      else onSaved()
     }
   }
 
@@ -314,13 +317,14 @@ function AddPlayerForm({
 
   const handleAdd = async () => {
     if (!selectedUserId) return
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("team_memberships")
-      .insert({ team_id: team.id, user_id: selectedUserId, role: "player" })
-    if (!error) {
+      .insert([{ team_id: team.id, user_id: selectedUserId, role: "player" }])
+      .select()
+    if (!error && data?.length) {
       setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
       setSelectedUserId("")
-    }
+    } else console.error("Erreur ajout joueur:", error)
   }
 
   return (
@@ -363,16 +367,20 @@ function AssignCaptainForm({
 
   const handleAssign = async () => {
     if (!selectedCaptainId) return
+
     if (currentCaptain) {
-      await supabase.from("team_memberships")
+      const { error } = await supabase.from("team_memberships")
         .update({ role: "player" })
         .eq("team_id", team.id)
         .eq("user_id", currentCaptain.user_id)
+      if (error) console.error("Erreur reset capitaine:", error)
     }
-    await supabase.from("team_memberships")
+
+    const { error } = await supabase.from("team_memberships")
       .update({ role: "captain" })
       .eq("team_id", team.id)
       .eq("user_id", selectedCaptainId)
+    if (error) console.error("Erreur assign capitaine:", error)
 
     setMembers(prev =>
       prev.map(m =>
