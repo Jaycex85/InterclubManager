@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useState, useMemo } from "react"
-import { supabase } from "../../../utils/supabaseClient"
+import dynamic from 'next/dynamic'
+import { supabase } from '../../../utils/supabaseClient'
 import { FiEdit } from 'react-icons/fi'
 import { MdPeople } from 'react-icons/md'
+
+const TeamForm = dynamic(() => import('./EditTeamForm'), { ssr: false })
 
 type Roles = { admin: boolean; club_admin: boolean }
 type ClubMembership = { club_id: string; club_name: string; role: "club_admin" | "player" }
@@ -18,7 +21,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [users, setUsers] = useState<ClubUser[]>([])
-  const [clubs, setClubs] = useState<{id: string, name: string}[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [teamToEdit, setTeamToEdit] = useState<Team | undefined>(undefined)
 
@@ -28,49 +30,41 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     return map
   }, [users])
 
-  const clubsById = useMemo(() => {
-    const map: Record<string, {id: string; name: string}> = {}
-    clubs.forEach(c => map[c.id] = c)
-    return map
-  }, [clubs])
-
+  // ------------------- Fetch Data -------------------
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
-        // --- Clubs ---
-        let clubIds: string[] = []
-        if (roles.admin) {
-          const { data: allClubs } = await supabase.from("clubs").select("*")
-          clubsById && allClubs && setClubs(allClubs)
-          clubIds = allClubs?.map(c => c.id) || []
-        } else if (roles.club_admin) {
-          clubIds = clubMemberships.map(c => c.club_id)
-          setClubs(clubMemberships.map(c => ({id: c.club_id, name: c.club_name})))
-        }
+        const clubIds = roles.admin
+          ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
+          : clubMemberships.map(c => c.club_id)
 
-        // --- Teams ---
-        const { data: teamsData } = await supabase
+        // Teams
+        const { data: teamsData, error: teamsError } = await supabase
           .from("teams")
           .select("*")
           .in("club_id", clubIds)
+          .order("name")
+        if (teamsError) throw teamsError
         setTeams(teamsData || [])
 
-        // --- Members ---
-        const teamIds = teamsData?.map(t => t.id) || []
+        // Team members
+        const teamIds = (teamsData || []).map(t => t.id)
         if (teamIds.length > 0) {
-          const { data: membersData } = await supabase
+          const { data: membersData, error: membersError } = await supabase
             .from("team_memberships")
             .select("*")
             .in("team_id", teamIds)
+          if (membersError) throw membersError
           setMembers(membersData || [])
         }
 
-        // --- Club users ---
-        const { data: clubUsersData } = await supabase
+        // Club users
+        const { data: clubUsersData, error: usersError } = await supabase
           .from("club_memberships")
           .select("user_id, users(id, first_name, last_name, email)")
           .in("club_id", clubIds)
+        if (usersError) throw usersError
 
         const usersMap: Record<string, ClubUser> = {}
         (clubUsersData || []).forEach((m: any) => {
@@ -85,7 +79,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         })
         setUsers(Object.values(usersMap))
       } catch (err) {
-        console.error(err)
+        console.error("Erreur dashboard:", err)
       }
       setLoading(false)
     }
@@ -94,6 +88,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
   if (loading) return <div>Chargement des équipes et joueurs...</div>
 
+  // ------------------- Render -------------------
   return (
     <div className="space-y-6">
 
@@ -111,15 +106,14 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
       {/* Teams Grid */}
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {teams.length === 0 && (
-          <div className="text-gray-400 col-span-full text-center py-6">Aucune équipe</div>
-        )}
         {teams
-          .sort((a,b) => a.name.localeCompare(b.name))
+          .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
           .map(team => {
             const teamMembers = members.filter(m => m.team_id === team.id)
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
+                
+                {/* Header */}
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-yellow-400 flex items-center gap-1">
                     <MdPeople /> {team.name}
@@ -133,9 +127,8 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                     </button>
                   )}
                 </div>
-                <p className="text-gray-300 text-sm mb-2">
-                  {team.category} - {team.gender} - {clubsById[team.club_id]?.name || "(Club inconnu)"}
-                </p>
+
+                <p className="text-gray-300 text-sm mb-2">{team.category} - {team.gender}</p>
 
                 {/* Members */}
                 <div className="space-y-1 mb-2">
@@ -148,11 +141,12 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                           <button
                             className="text-red-400 hover:text-red-600"
                             onClick={async () => {
-                              await supabase.from("team_memberships")
+                              const { error } = await supabase
+                                .from("team_memberships")
                                 .delete()
                                 .eq("team_id", tm.team_id)
                                 .eq("user_id", tm.user_id)
-                              setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
+                              if (!error) setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
                             }}
                           >
                             Supprimer
@@ -162,143 +156,35 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                     )
                   })}
                 </div>
+
               </div>
             )
-          })
-        }
+          })}
       </div>
 
       {/* Team Modal */}
       {isModalOpen && (
-        <TeamModal
-          isOpen={isModalOpen}
-          teamToEdit={teamToEdit}
-          roles={roles}
-          clubMemberships={clubMemberships}
-          users={users}
-          clubs={clubs}
-          onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
-          onSaved={(savedTeam: Team) => {
-            setTeams(prev => {
-              const idx = prev.findIndex(t => t.id === savedTeam.id)
-              if (idx !== -1) prev[idx] = savedTeam
-              else prev.push(savedTeam)
-              return [...prev]
-            })
-            setIsModalOpen(false)
-          }}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-lg shadow-xl animate-fadeIn">
+            <TeamForm
+              teamId={teamToEdit?.id || 'new'}
+              onSaved={() => { setIsModalOpen(false); setTeamToEdit(undefined); setLoading(true); setTimeout(() => setLoading(false), 100) }}
+              onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
+              roles={roles}
+              clubMemberships={clubMemberships}
+              users={users}
+            />
+          </div>
+        </div>
       )}
 
-    </div>
-  )
-}
-
-// -------------------- TeamModal --------------------
-type TeamModalProps = {
-  isOpen: boolean
-  onClose: () => void
-  onSaved: (team: Team) => void
-  teamToEdit?: Team
-  roles: Roles
-  clubMemberships: ClubMembership[]
-  users: ClubUser[]
-  clubs: {id: string, name: string}[]
-}
-
-function TeamModal({ isOpen, onClose, onSaved, teamToEdit, roles, clubMemberships, users, clubs }: TeamModalProps) {
-
-  const isNew = !teamToEdit
-  const [name, setName] = useState(teamToEdit?.name || "")
-  const [category, setCategory] = useState(teamToEdit?.category || "")
-  const [gender, setGender] = useState(teamToEdit?.gender || "")
-  const [clubId, setClubId] = useState(teamToEdit?.club_id || "")
-  const [captainId, setCaptainId] = useState<string | null>(teamToEdit?.captain_id || null)
-
-  useEffect(() => {
-    setName(teamToEdit?.name || "")
-    setCategory(teamToEdit?.category || "")
-    setGender(teamToEdit?.gender || "")
-    setClubId(teamToEdit?.club_id || (roles.club_admin && !roles.admin && clubMemberships.length === 1 ? clubMemberships[0].club_id : ""))
-    setCaptainId(teamToEdit?.captain_id || null)
-  }, [teamToEdit, roles, clubMemberships])
-
-  const clubOptions = useMemo(() => {
-    if (roles.admin) return clubs
-    if (roles.club_admin) return clubMemberships.map(c => ({id: c.club_id, name: c.club_name}))
-    return []
-  }, [roles, clubs, clubMemberships])
-
-  const clubReadonly = roles.club_admin && !roles.admin && clubMemberships.length === 1
-
-  const teamPlayers = useMemo(() => {
-    if (!clubId) return []
-    return users.filter(u => {
-      return clubMemberships.some(c => c.club_id === clubId) // user belongs to club
-    })
-  }, [users, clubId, clubMemberships])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const payload: any = { name, category, gender, club_id: clubId || null, captain_id: captainId || null }
-    let savedTeam: Team | null = null
-    if (isNew) {
-      const { data, error } = await supabase.from("teams").insert([payload]).select().single()
-      if (!error && data) savedTeam = data
-    } else {
-      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit?.id).select().single()
-      if (!error && data) savedTeam = data
-    }
-    if (savedTeam) onSaved(savedTeam)
-  }
-
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-lg w-full max-w-md space-y-4 shadow-xl">
-        <h3 className="text-xl font-bold text-yellow-400">{isNew ? "Créer une équipe" : "Modifier l'équipe"}</h3>
-
-        {/* Nom */}
-        <input className="w-full p-2 rounded bg-gray-700 text-white" placeholder="Nom" value={name} onChange={e => setName(e.target.value)} required />
-
-        {/* Club */}
-        {clubReadonly ? (
-          <input className="w-full p-2 rounded bg-gray-700 text-white" value={clubMemberships[0].club_name} disabled />
-        ) : (
-          <select className="w-full p-2 rounded bg-gray-700 text-white" value={clubId} onChange={e => setClubId(e.target.value)} required>
-            <option value="">-- Sélectionner un club --</option>
-            {clubOptions.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        )}
-
-        {/* Catégorie */}
-        <input className="w-full p-2 rounded bg-gray-700 text-white" placeholder="Catégorie" value={category} onChange={e => setCategory(e.target.value)} />
-
-        {/* Genre */}
-        <select className="w-full p-2 rounded bg-gray-700 text-white" value={gender} onChange={e => setGender(e.target.value)}>
-          <option value="">-- Sélectionner --</option>
-          <option value="men">Hommes</option>
-          <option value="women">Femmes</option>
-          <option value="mixed">Mixte</option>
-        </select>
-
-        {/* Capitaine */}
-        <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
-          <option value="">-- Aucun capitaine --</option>
-          {teamPlayers.map(u => (
-            <option key={u.id} value={u.id}>{[u.last_name, u.first_name].filter(Boolean).join(' ')} - {u.email}</option>
-          ))}
-        </select>
-
-        {/* Buttons */}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">Annuler</button>
-          <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">{isNew ? "Créer" : "Enregistrer"}</button>
-        </div>
-      </form>
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+      `}</style>
     </div>
   )
 }
