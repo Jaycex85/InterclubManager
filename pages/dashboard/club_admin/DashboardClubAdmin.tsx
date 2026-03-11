@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from "react"
-import { supabase } from "../../../../utils/supabaseClient"
+import { supabase } from "../../../utils/supabaseClient"
 import { FiEdit } from 'react-icons/fi'
 import { MdPeople } from 'react-icons/md'
 
