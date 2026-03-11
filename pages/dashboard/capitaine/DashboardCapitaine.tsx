@@ -49,47 +49,63 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
   if (loading) return <div>Chargement...</div>
 
   return (
-    <div className="border border-gray-700 rounded overflow-hidden">
-      <div className="p-4 bg-gray-800 font-bold flex items-center">
-        <MdSportsTennis className="mr-2" /> {teamName}
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center bg-gray-800 p-4 rounded shadow">
+        <MdSportsTennis className="mr-2 text-yellow-400" size={24} /> 
+        <h1 className="text-xl font-bold text-white">{teamName}</h1>
       </div>
 
-      <div className="p-4 grid gap-2">
+      {/* Bouton Ajouter */}
+      <div className="flex justify-end">
         <button
-          className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded font-bold w-max mb-2"
+          className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded shadow"
           onClick={() => setOpenMatchId('new')}
         >
           + Ajouter un match
         </button>
+      </div>
 
+      {/* Liste des matchs */}
+      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {matches.length === 0 && <div className="text-gray-400">Aucun match pour cette équipe</div>}
 
         {matches.map((m) => (
-          <div key={m.id} className="flex justify-between items-center bg-gray-700 hover:bg-gray-600 rounded p-2">
-            <div>
-              {m.match_date} {m.match_time} - {m.opponent} ({m.location_type})
-              {m.clubaddress && (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="ml-2 text-blue-400 underline"
-                >
-                  📍
-                </a>
-              )}
+          <div
+            key={m.id}
+            className="bg-gray-700 hover:bg-gray-600 rounded shadow p-4 flex flex-col justify-between"
+          >
+            {/* Info match */}
+            <div className="mb-3">
+              <p className="text-white font-semibold">{m.match_date} {m.match_time}</p>
+              <p className="text-gray-300">{m.opponent} ({m.location_type}) 
+                {m.clubaddress && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-2 text-blue-400 underline"
+                  >
+                    📍
+                  </a>
+                )}
+              </p>
             </div>
-            <div className="space-x-2">
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
               <button
-                className={`px-2 py-1 rounded ${
-                  m.composition_validated ? 'bg-green-600 hover:bg-green-500' : 'bg-yellow-500 hover:bg-yellow-400'
-                } font-bold`}
+                className={`px-3 py-1 rounded font-bold ${
+                  m.composition_validated
+                    ? 'bg-green-600 hover:bg-green-500 text-white'
+                    : 'bg-yellow-500 hover:bg-yellow-400 text-white'
+                }`}
                 onClick={() => setOpenMatchId(m.id)}
               >
                 Editer Match
               </button>
               <button
-                className="px-2 py-1 bg-blue-500 hover:bg-blue-400 rounded font-bold"
+                className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-bold"
                 onClick={() => setOpenCompositionId(m.id)}
               >
                 Composition
@@ -145,18 +161,10 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
 
       <style jsx>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
       `}</style>
     </div>
   )
