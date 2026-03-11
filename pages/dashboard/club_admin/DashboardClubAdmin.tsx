@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@supabase/supabase-js"
+import { FiEdit } from 'react-icons/fi'
+import { MdPeople } from 'react-icons/md'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,41 +11,14 @@ const supabase = createClient(
 )
 
 type Roles = { admin: boolean; club_admin: boolean }
+type ClubMembership = { club_id: string; club_name: string; role: "club_admin" | "player" }
+type Team = { id: string; name: string; category: string; gender: string; club_id: string }
+type ClubUser = { id: string; first_name: string; last_name: string; email: string }
+type TeamMember = { team_id: string; user_id: string; role: "player" | "captain" }
 
-type ClubMembership = {
-  club_id: string
-  club_name: string
-  role: "club_admin" | "player"
-}
-
-type Team = {
-  id: string
-  name: string
-  category: string
-  gender: string
-  club_id: string
-}
-
-type ClubUser = {
-  id: string
-  first_name: string
-  last_name: string
-  email: string
-}
-
-type TeamMember = {
-  team_id: string
-  user_id: string
-  role: "player" | "captain"
-}
-
-type Props = {
-  roles: Roles
-  clubMemberships: ClubMembership[]
-}
+type Props = { roles: Roles; clubMemberships: ClubMembership[] }
 
 export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
-
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
@@ -66,7 +41,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
           : clubMemberships.map(c => c.club_id)
 
-        // Équipes
+        // Teams
         const { data: teamsData, error: teamsError } = await supabase
           .from("teams")
           .select("*")
@@ -75,7 +50,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         if (teamsError) throw teamsError
         setTeams(teamsData || [])
 
-        // Membres
+        // Team members
         const teamIds = (teamsData || []).map(t => t.id)
         if (teamIds.length > 0) {
           const { data: membersData, error: membersError } = await supabase
@@ -86,7 +61,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           setMembers(membersData || [])
         }
 
-        // Users du club
+        // Club users
         const { data: clubUsersData, error: usersError } = await supabase
           .from("club_memberships")
           .select("user_id, users(id, first_name, last_name, email)")
@@ -105,7 +80,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           }
         })
         setUsers(Object.values(usersMap))
-
       } catch (err) {
         console.error("Erreur dashboard:", err)
       }
@@ -120,14 +94,16 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   return (
     <div className="space-y-6">
 
-      {/* Bouton nouvelle équipe */}
+      {/* Header + Nouvelle équipe */}
       {(roles.admin || roles.club_admin) && (
-        <button
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-          onClick={() => { setTeamToEdit(undefined); setIsModalOpen(true) }}
-        >
-          + Nouvelle équipe
-        </button>
+        <div className="flex justify-end">
+          <button
+            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded shadow-md transition"
+            onClick={() => { setTeamToEdit(undefined); setIsModalOpen(true) }}
+          >
+            + Nouvelle équipe
+          </button>
+        </div>
       )}
 
       {/* Modal création / édition équipe */}
@@ -137,7 +113,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
         onCreate={async ({id, name, category, gender}) => {
           if (id) {
-            // MODIFICATION
             const { data, error } = await supabase
               .from("teams")
               .update({ name, category, gender })
@@ -148,7 +123,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
               setTeams(prev => prev.map(t => t.id === id ? data : t))
             }
           } else {
-            // CRÉATION
             const { data, error } = await supabase
               .from("teams")
               .insert({ name, category, gender, club_id: clubMemberships[0].club_id })
@@ -159,29 +133,33 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         }}
       />
 
-      {/* Liste des équipes en cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Teams Grid */}
+      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {teams
           .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
           .map(team => {
             const teamMembers = members.filter(m => m.team_id === team.id)
-
             return (
-              <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition">
+              <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
+                
+                {/* Header */}
                 <div className="flex justify-between items-center mb-2">
-                  <h2 className="text-lg font-bold text-yellow-400">{team.name}</h2>
+                  <h2 className="text-lg font-bold text-yellow-400 flex items-center gap-1">
+                    <MdPeople /> {team.name}
+                  </h2>
                   {(roles.admin || roles.club_admin) && (
                     <button
-                      className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-sm"
+                      className="bg-gray-600 hover:bg-gray-500 px-2 py-1 rounded text-sm flex items-center gap-1"
                       onClick={() => { setTeamToEdit(team); setIsModalOpen(true) }}
                     >
-                      Modifier
+                      <FiEdit /> Modifier
                     </button>
                   )}
                 </div>
+
                 <p className="text-gray-300 text-sm mb-2">{team.category} - {team.gender}</p>
 
-                {/* Membres */}
+                {/* Members */}
                 <div className="space-y-1 mb-2">
                   {teamMembers.map(tm => {
                     const user = usersById[tm.user_id]
@@ -208,12 +186,12 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                   })}
                 </div>
 
-                {/* Formulaires AddPlayer / AssignCaptain */}
+                {/* Forms */}
                 {(roles.admin || roles.club_admin) && (
-                  <>
+                  <div className="flex flex-col gap-2 mt-2">
                     <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
                     <AssignCaptainForm team={team} members={members} setMembers={setMembers} usersById={usersById} />
-                  </>
+                  </div>
                 )}
               </div>
             )
@@ -223,7 +201,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ------------------- Modal création / édition équipe -------------------
+// ------------------- Modal -------------------
 function TeamModal({ isOpen, onClose, onCreate, teamToEdit }: 
   { isOpen: boolean, onClose: () => void, onCreate: (team: {id?: string, name: string, category: string, gender: string}) => void, teamToEdit?: Team }) {
 
@@ -246,129 +224,17 @@ function TeamModal({ isOpen, onClose, onCreate, teamToEdit }:
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 p-6 rounded w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md shadow-xl">
         <h3 className="text-xl font-bold text-yellow-400 mb-4">{teamToEdit ? "Modifier l'équipe" : "Créer une nouvelle équipe"}</h3>
         <input className="w-full mb-2 p-2 rounded bg-gray-700 text-white" placeholder="Nom" value={name} onChange={e => setName(e.target.value)} />
         <input className="w-full mb-2 p-2 rounded bg-gray-700 text-white" placeholder="Catégorie" value={category} onChange={e => setCategory(e.target.value)} />
         <input className="w-full mb-4 p-2 rounded bg-gray-700 text-white" placeholder="Genre" value={gender} onChange={e => setGender(e.target.value)} />
         <div className="flex justify-end gap-2">
           <button className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500" onClick={onClose}>Annuler</button>
-          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700" onClick={handleSubmit}>{teamToEdit ? "Modifier" : "Créer"}</button>
+          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700">{teamToEdit ? "Modifier" : "Créer"}</button>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ---------------------- Add Player Form ----------------------
-function AddPlayerForm({
-  team,
-  members,
-  setMembers,
-  users
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  users: ClubUser[]
-}) {
-  const [selectedUserId, setSelectedUserId] = useState("")
-  const availableUsers = users.filter(
-    u => !members.some(m => m.team_id === team.id && m.user_id === u.id)
-  )
-
-  const handleAdd = async () => {
-    if (!selectedUserId) return
-    const { error } = await supabase
-      .from("team_memberships")
-      .insert({ team_id: team.id, user_id: selectedUserId, role: "player" })
-    if (!error) {
-      setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
-      setSelectedUserId("")
-    }
-  }
-
-  return (
-    <div className="mt-2 flex gap-2">
-      <select
-        className="bg-gray-700 text-white p-1 rounded"
-        value={selectedUserId}
-        onChange={e => setSelectedUserId(e.target.value)}
-      >
-        <option value="">Sélectionner un joueur</option>
-        {availableUsers.map(u => (
-          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-        ))}
-      </select>
-      <button className="bg-green-600 hover:bg-green-700 px-2 rounded" onClick={handleAdd}>
-        Ajouter
-      </button>
-    </div>
-  )
-}
-
-// ---------------------- Assign Captain Form ----------------------
-function AssignCaptainForm({
-  team,
-  members,
-  setMembers,
-  usersById
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  usersById: Record<string, ClubUser>
-}) {
-  const [selectedCaptainId, setSelectedCaptainId] = useState("")
-  const teamPlayers = members.filter(m => m.team_id === team.id)
-  const currentCaptain = teamPlayers.find(m => m.role === "captain")
-
-  const handleAssign = async () => {
-    if (!selectedCaptainId) return
-    if (currentCaptain) {
-      await supabase
-        .from("team_memberships")
-        .update({ role: "player" })
-        .eq("team_id", team.id)
-        .eq("user_id", currentCaptain.user_id)
-    }
-    await supabase
-      .from("team_memberships")
-      .update({ role: "captain" })
-      .eq("team_id", team.id)
-      .eq("user_id", selectedCaptainId)
-
-    setMembers(prev =>
-      prev.map(m =>
-        m.team_id === team.id
-          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
-          : m
-      )
-    )
-    setSelectedCaptainId("")
-  }
-
-  return (
-    <div className="mt-2 flex gap-2">
-      <select
-        className="bg-gray-700 text-white p-1 rounded"
-        value={selectedCaptainId}
-        onChange={e => setSelectedCaptainId(e.target.value)}
-      >
-        <option value="">Sélectionner capitaine</option>
-        {teamPlayers.map(m => {
-          const user = usersById[m.user_id]
-          return (
-            <option key={m.user_id} value={m.user_id}>
-              {user ? `${user.first_name} ${user.last_name}` : m.user_id}
-            </option>
-          )
-        })}
-      </select>
-      <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>
-        Assigner
-      </button>
     </div>
   )
 }
