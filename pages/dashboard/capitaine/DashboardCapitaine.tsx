@@ -76,7 +76,6 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
             key={m.id}
             className="bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md p-4 flex flex-col justify-between transition"
           >
-            {/* Match Info */}
             <div className="mb-3">
               <p className="text-white font-semibold text-lg">{m.match_date} {m.match_time}</p>
               <p className="text-gray-300 font-medium">{m.opponent} ({m.location_type})</p>
@@ -97,7 +96,6 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-2">
               <button
                 className={`px-3 py-1 rounded font-semibold transition ${
@@ -125,7 +123,9 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg animate-fadeIn">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-yellow-400">Match</h2>
+              <h2 className="text-xl font-bold text-yellow-400">
+                {openMatchId === 'new' ? `Nouveau match pour ${teamName}` : 'Éditer le match'}
+              </h2>
               <button className="text-red-400 hover:text-red-600 font-bold" onClick={() => setOpenMatchId(null)}>✕</button>
             </div>
             <MatchForm
@@ -136,7 +136,8 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
                 setTimeout(() => setLoading(false), 100)
               }}
               onClose={() => setOpenMatchId(null)}
-              teamId={openMatchId === 'new' ? teamId : undefined}
+              teamId={teamId} // On force toujours l'équipe du capitaine
+              teamName={teamName} // Affichage du nom de l'équipe
             />
           </div>
         </div>
