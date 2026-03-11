@@ -5,7 +5,7 @@ type Props = {
   matchId?: string
   teamId: string
   teamName: string
-  onSaved: () => void
+  onSaved: (match: any) => void
   onClose: () => void
 }
 
@@ -45,32 +45,33 @@ export default function MatchForm({ matchId, teamId, teamName, onSaved, onClose 
   }, [matchId])
 
   const handleSave = async () => {
-  setLoading(true)
+    setLoading(true)
 
-  const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
 
-  const { error } = await supabase
-    .from('matches')
-    .upsert({
-      id: matchId,
-      team_id: teamId,
-      opponent,
-      match_date: matchDate,
-      match_time: matchTime,
-      location_type: locationType,
-      clubaddress: clubAddress,
-      created_by: user?.id
-    })
+    const { data, error } = await supabase
+      .from('matches')
+      .upsert({
+        id: matchId,
+        team_id: teamId,
+        opponent,
+        match_date: matchDate,
+        match_time: matchTime,
+        location_type: locationType,
+        clubaddress: clubAddress,
+        created_by: user?.id
+      })
+      .select()
+      .single()
 
-  if (error) console.error(error)
-  else onSaved()
+    if (error) console.error(error)
+    else onSaved(data)
 
-  setLoading(false)
-}
+    setLoading(false)
+  }
 
   return (
     <div>
-      
 
       {loading ? (
         <p className="text-gray-300">Chargement...</p>
@@ -99,14 +100,14 @@ export default function MatchForm({ matchId, teamId, teamName, onSaved, onClose 
           />
 
           <select
-  value={locationType}
-  onChange={(e) => setLocationType(e.target.value)}
-  className="mb-2 w-full p-2 rounded bg-gray-700 text-white"
->
-  <option value="">Type de lieu</option>
-  <option value="Domicile">Domicile</option>
-  <option value="Extérieur">Extérieur</option>
-</select>
+            value={locationType}
+            onChange={(e) => setLocationType(e.target.value)}
+            className="mb-2 w-full p-2 rounded bg-gray-700 text-white"
+          >
+            <option value="">Type de lieu</option>
+            <option value="Domicile">Domicile</option>
+            <option value="Extérieur">Extérieur</option>
+          </select>
 
           <input
             type="text"
