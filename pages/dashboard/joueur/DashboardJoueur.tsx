@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../../utils/supabaseClient'
+import { MdSportsTennis } from 'react-icons/md'
+import { FiMapPin } from 'react-icons/fi'
 
 type Match = {
   id: string
@@ -29,40 +31,34 @@ type ModalPlayer = {
   email?: string
 }
 
-type ModalData = {
-  visible: boolean
-  matchName: string
-  composition: ModalPlayer[]
-}
-
 type Props = {
   teamId: string
+  teamName: string
 }
 
-export default function DashboardJoueur({ teamId }: Props) {
+export default function DashboardJoueur({ teamId, teamName }: Props) {
   const [matches, setMatches] = useState<Match[]>([])
   const [availability, setAvailability] = useState<Availability[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<ModalData>({ visible: false, matchName: '', composition: [] })
   const [userId, setUserId] = useState<string>('')
+  const [openCompositionId, setOpenCompositionId] = useState<string | null>(null)
+  const [modalComposition, setModalComposition] = useState<ModalPlayer[]>([])
 
   useEffect(() => {
-    const init = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
 
-      // Fetch matches and availability for this team
-      const { data: matchesData } = await supabase
+      const { data: matchData } = await supabase
         .from('matches')
         .select('*')
         .eq('team_id', teamId)
         .order('match_date', { ascending: true })
 
-      const matchList = matchesData?.map(m => ({ ...m, team_id: String(m.team_id) })) || []
-      setMatches(matchList)
+      setMatches(matchData || [])
 
-      const matchIds = matchList.map(m => m.id)
+      const matchIds = matchData?.map(m => m.id) || []
       if (matchIds.length > 0) {
         const { data: availData } = await supabase
           .from('availability')
@@ -73,7 +69,7 @@ export default function DashboardJoueur({ teamId }: Props) {
 
       setLoading(false)
     }
-    init()
+    fetchData()
   }, [teamId])
 
   const setStatus = async (matchId: string, status: 'available' | 'unavailable') => {
@@ -107,7 +103,7 @@ export default function DashboardJoueur({ teamId }: Props) {
   const getSelectionStatus = (matchId: string) =>
     availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
-  const showComposition = async (matchId: string, matchName: string) => {
+  const showComposition = async (matchId: string) => {
     const { data } = await supabase
       .from('availability')
       .select('user_id, selection_status, users(first_name, last_name, email)')
@@ -122,107 +118,121 @@ export default function DashboardJoueur({ teamId }: Props) {
         last_name: a.users?.last_name,
         email: a.users?.email
       }))
-      setModal({ visible: true, matchName, composition: comp })
+      setModalComposition(comp)
+      setOpenCompositionId(matchId)
     }
-  }
-
-  const renderMatch = (m: Match, editable: boolean) => {
-    const status = getStatus(m.id)
-    const selection = getSelectionStatus(m.id)
-
-    return (
-      <div key={m.id} className="p-4 rounded-lg border border-gray-700 bg-gray-800 shadow hover:shadow-lg transition">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-          <div>
-            <div className="font-bold text-lg text-yellow-400">{m.opponent}</div>
-            <div className="text-gray-200">{m.match_date} — {m.match_time} ({m.location_type})</div>
-          </div>
-          {m.clubaddress && (
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 sm:mt-0 px-2 py-1 text-white rounded hover:text-yellow-400"
-            >
-              📍
-            </a>
-          )}
-        </div>
-
-        {editable && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              onClick={() => setStatus(m.id, 'available')}
-              className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-400 text-black' : 'bg-gray-700 hover:bg-green-300'}`}
-            >
-              Disponible
-            </button>
-            <button
-              onClick={() => setStatus(m.id, 'unavailable')}
-              className={`px-3 py-1 rounded font-bold ${status === 'unavailable' ? 'bg-red-400 text-black' : 'bg-gray-700 hover:bg-red-300'}`}
-            >
-              Indisponible
-            </button>
-          </div>
-        )}
-
-        {status && <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>}
-
-        {m.composition_validated && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-green-200 text-sm font-bold">
-              Composition validée — {selection === 'selected' ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
-            </span>
-            <button
-              className="px-2 py-1 text-black bg-yellow-400 rounded hover:bg-yellow-300 text-sm"
-              onClick={() => showComposition(m.id, m.opponent)}
-            >
-              Voir composition
-            </button>
-          </div>
-        )}
-      </div>
-    )
   }
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
-  // Catégorisation des matchs
-  const matchesEnAttente = matches.filter(m => !m.composition_validated)
-  const mesMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
-  const autresMatchs = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
-
   return (
     <div className="space-y-6">
-      {matchesEnAttente.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-orange-400">Matchs en attente</h3>
-          {matchesEnAttente.map(m => renderMatch(m, true))}
+      {/* Header */}
+      <div className="flex items-center justify-between bg-gray-800 p-4 rounded-lg shadow-md">
+        <div className="flex items-center gap-2">
+          <MdSportsTennis className="text-yellow-400" size={28} />
+          <h1 className="text-2xl font-bold text-white">{teamName}</h1>
         </div>
-      )}
+      </div>
 
-      {mesMatchs.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-green-400">Mes matchs</h3>
-          {mesMatchs.map(m => renderMatch(m, false))}
-        </div>
-      )}
+      {/* Matches Grid */}
+      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {matches.length === 0 && (
+          <div className="text-gray-400 col-span-full text-center py-6">Aucun match pour cette équipe</div>
+        )}
 
-      {autresMatchs.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-xl font-bold text-red-400">Autres matchs</h3>
-          {autresMatchs.map(m => renderMatch(m, false))}
-        </div>
-      )}
+        {matches.map(m => {
+          const status = getStatus(m.id)
+          const selection = getSelectionStatus(m.id)
+          const compositionValidated = m.composition_validated
 
-      {matches.length === 0 && <div>Aucun match pour le moment</div>}
+          return (
+            <div
+              key={m.id}
+              className="bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md p-4 flex flex-col justify-between transition"
+            >
+              {/* Match Info */}
+              <div className="mb-3">
+                <p className="text-white font-semibold text-lg">{m.match_date} {m.match_time}</p>
+                <p className="text-gray-300 font-medium">{m.opponent} ({m.location_type})</p>
+                {m.clubaddress && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-blue-400 mt-1 font-medium"
+                  >
+                    <FiMapPin /> Voir sur carte
+                  </a>
+                )}
+                {compositionValidated && (
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">
+                    Composition validée
+                  </span>
+                )}
+              </div>
 
-      {modal.visible && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
-            <h2 className="text-xl font-bold mb-4 text-yellow-400">{modal.matchName}</h2>
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-2">
+                {!compositionValidated && (
+                  <>
+                    <button
+                      onClick={() => setStatus(m.id, 'available')}
+                      className={`px-3 py-1 rounded font-semibold transition ${
+                        status === 'available'
+                          ? 'bg-green-400 text-black'
+                          : 'bg-gray-700 hover:bg-green-300 text-white'
+                      }`}
+                    >
+                      Disponible
+                    </button>
+                    <button
+                      onClick={() => setStatus(m.id, 'unavailable')}
+                      className={`px-3 py-1 rounded font-semibold transition ${
+                        status === 'unavailable'
+                          ? 'bg-red-400 text-black'
+                          : 'bg-gray-700 hover:bg-red-300 text-white'
+                      }`}
+                    >
+                      Indisponible
+                    </button>
+                  </>
+                )}
+                {compositionValidated && (
+                  <button
+                    onClick={() => showComposition(m.id)}
+                    className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-semibold transition"
+                  >
+                    Voir composition
+                  </button>
+                )}
+              </div>
+
+              {compositionValidated && status && (
+                <div className="mt-2 text-gray-100 text-sm">
+                  {selection === 'selected' ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Modal Composition */}
+      {openCompositionId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-lg animate-fadeIn">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-yellow-400">Composition</h2>
+              <button
+                className="text-red-400 hover:text-red-600 font-bold"
+                onClick={() => setOpenCompositionId(null)}
+              >
+                ✕
+              </button>
+            </div>
             <div className="space-y-2">
-              {modal.composition.map(p => {
+              {modalComposition.map(p => {
                 const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim()
                 const label = fullName ? `${fullName} (${p.email})` : p.email || 'Nom inconnu'
                 return (
@@ -233,17 +243,17 @@ export default function DashboardJoueur({ teamId }: Props) {
                 )
               })}
             </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                className="px-4 py-2 bg-red-500 rounded hover:bg-red-400"
-                onClick={() => setModal({ ...modal, visible: false })}
-              >
-                Fermer
-              </button>
-            </div>
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
+      `}</style>
     </div>
   )
 }
