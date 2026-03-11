@@ -1,20 +1,18 @@
 'use client'
 
 import { useEffect, useState, useMemo } from "react"
-import { supabase } from "../../../utils/supabaseClient"
+import { supabase } from '../../../utils/supabaseClient'
 import { FiEdit } from 'react-icons/fi'
 import { MdPeople } from 'react-icons/md'
 
-// ----- Types -----
 type Roles = { admin: boolean; club_admin: boolean }
 type ClubMembership = { club_id: string; club_name: string; role: "club_admin" | "player" }
-type Team = { id: string; name: string; category: string; gender: string; club_id: string; captain_id?: string }
+type Team = { id: string; name: string; category: string; gender: string; club_id: string }
 type ClubUser = { id: string; first_name: string; last_name: string; email: string }
 type TeamMember = { team_id: string; user_id: string; role: "player" | "captain" }
 
-type Props = { roles: Roles; clubMemberships: ClubMembership[]; }
+type Props = { roles: Roles; clubMemberships: ClubMembership[] }
 
-// ----- Dashboard -----
 export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
@@ -29,7 +27,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     return map
   }, [users])
 
-  // ----- Fetch Data -----
+  // ------------------- Fetch Data -------------------
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
@@ -43,6 +41,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           .from("teams")
           .select("*")
           .in("club_id", clubIds)
+          .order("name")
         if (teamsError) throw teamsError
         setTeams(teamsData || [])
 
@@ -86,6 +85,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
   if (loading) return <div>Chargement des équipes et joueurs...</div>
 
+  // ------------------- Render -------------------
   return (
     <div className="space-y-6">
 
@@ -104,10 +104,9 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
       {/* Teams Grid */}
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {teams
-          .sort((a, b) => a.name.localeCompare(b.name))
+          .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
           .map(team => {
             const teamMembers = members.filter(m => m.team_id === team.id)
-            const captain = teamMembers.find(m => m.role === "captain")
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
                 
@@ -155,14 +154,13 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                   })}
                 </div>
 
-                {/* Add Player / Assign Captain */}
+                {/* Forms */}
                 {(roles.admin || roles.club_admin) && (
                   <div className="flex flex-col gap-2 mt-2">
                     <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
                     <AssignCaptainForm team={team} members={members} setMembers={setMembers} usersById={usersById} />
                   </div>
                 )}
-
               </div>
             )
           })}
@@ -172,15 +170,12 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
       {isModalOpen && (
         <TeamModal
           isOpen={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
           teamToEdit={teamToEdit}
+          users={users}
           roles={roles}
           clubMemberships={clubMemberships}
-          users={users}
-          onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
-          onSaved={(team) => {
-            if (teamToEdit) setTeams(prev => prev.map(t => t.id === team.id ? team : t))
-            else setTeams(prev => [...prev, team])
-          }}
+          onSaved={() => setIsModalOpen(false)}
         />
       )}
 
@@ -188,8 +183,115 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
+// ------------------- Team Modal -------------------
+function TeamModal({
+  isOpen,
+  onClose,
+  onSaved,
+  teamToEdit,
+  roles,
+  clubMemberships,
+  users
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onSaved: () => void
+  teamToEdit?: Team
+  roles: Roles
+  clubMemberships: ClubMembership[]
+  users: ClubUser[]
+}) {
+
+  if (!isOpen) return null
+
+  const isNew = !teamToEdit
+
+  const [name, setName] = useState(teamToEdit?.name || "")
+  const [category, setCategory] = useState(teamToEdit?.category || "")
+  const [gender, setGender] = useState(teamToEdit?.gender || "")
+  const [clubId, setClubId] = useState(teamToEdit?.club_id || clubMemberships[0]?.club_id || "")
+  const [captainId, setCaptainId] = useState<string | null>(null)
+
+  const clubPlayers = users  // tous les users du club pour le dropdown capitaine
+
+  const handleSubmit = async () => {
+    const payload = {
+      name,
+      category,
+      gender,
+      club_id: clubId,
+      captain_id: captainId
+    }
+
+    if (isNew) {
+      const { data, error } = await supabase.from("teams").insert([payload]).select().single()
+      if (!error && data) {
+        onSaved()
+      }
+    } else {
+      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit.id)
+      if (!error && data) {
+        onSaved()
+      }
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md shadow-xl">
+        <h3 className="text-xl font-bold text-yellow-400 mb-4">{isNew ? "Créer une nouvelle équipe" : "Modifier l'équipe"}</h3>
+
+        <div className="mb-2">
+          <label className="block mb-1">Nom</label>
+          <input className="w-full p-2 rounded bg-gray-700 text-white" value={name} onChange={e => setName(e.target.value)} />
+        </div>
+
+        <div className="mb-2">
+          <label className="block mb-1">Catégorie</label>
+          <input className="w-full p-2 rounded bg-gray-700 text-white" value={category} onChange={e => setCategory(e.target.value)} />
+        </div>
+
+        <div className="mb-2">
+          <label className="block mb-1">Genre</label>
+          <select className="w-full p-2 rounded bg-gray-700 text-white" value={gender} onChange={e => setGender(e.target.value)}>
+            <option value="">-- Sélectionner --</option>
+            <option value="men">Hommes</option>
+            <option value="women">Femmes</option>
+            <option value="mixed">Mixte</option>
+          </select>
+        </div>
+
+        <div className="mb-2">
+          <label className="block mb-1">Capitaine</label>
+          <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
+            <option value="">-- Aucun --</option>
+            {clubPlayers.map(u => (
+              <option key={u.id} value={u.id}>{u.first_name} {u.last_name} - {u.email}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-4">
+          <button className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500" onClick={onClose}>Annuler</button>
+          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white font-bold" onClick={handleSubmit}>{isNew ? "Créer" : "Enregistrer"}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ---------------------- Add Player Form ----------------------
-function AddPlayerForm({ team, members, setMembers, users }: { team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, users: ClubUser[] }) {
+function AddPlayerForm({
+  team,
+  members,
+  setMembers,
+  users
+}: {
+  team: Team
+  members: TeamMember[]
+  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  users: ClubUser[]
+}) {
   const [selectedUserId, setSelectedUserId] = useState("")
   const availableUsers = users.filter(u => !members.some(m => m.team_id === team.id && m.user_id === u.id))
 
@@ -218,7 +320,17 @@ function AddPlayerForm({ team, members, setMembers, users }: { team: Team, membe
 }
 
 // ---------------------- Assign Captain Form ----------------------
-function AssignCaptainForm({ team, members, setMembers, usersById }: { team: Team, members: TeamMember[], setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>, usersById: Record<string, ClubUser> }) {
+function AssignCaptainForm({
+  team,
+  members,
+  setMembers,
+  usersById
+}: {
+  team: Team
+  members: TeamMember[]
+  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
+  usersById: Record<string, ClubUser>
+}) {
   const [selectedCaptainId, setSelectedCaptainId] = useState("")
   const teamPlayers = members.filter(m => m.team_id === team.id)
   const currentCaptain = teamPlayers.find(m => m.role === "captain")
@@ -258,9 +370,4 @@ function AssignCaptainForm({ team, members, setMembers, usersById }: { team: Tea
       <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>Assigner</button>
     </div>
   )
-}
-
-// ---------------------- Team Modal ----------------------
-function TeamModal({ isOpen, onClose, onSaved, teamToEdit, roles, clubMemberships, users }: any) {
-  // Code identique à celui que je t'ai fourni dans la réponse précédente
 }
