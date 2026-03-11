@@ -52,6 +52,7 @@ export default function DashboardJoueur({ teamId }: Props) {
       if (!user) return
       setUserId(user.id)
 
+      // Fetch matches and availability for this team
       const { data: matchesData } = await supabase
         .from('matches')
         .select('*')
@@ -82,24 +83,29 @@ export default function DashboardJoueur({ teamId }: Props) {
 
     const existing = availability.find(a => a.match_id === matchId && a.user_id === userId)
     if (existing) {
-      await supabase.from('availability')
+      await supabase
+        .from('availability')
         .update({ status })
         .eq('match_id', matchId)
         .eq('user_id', userId)
     } else {
-      await supabase.from('availability')
-        .insert({ match_id: matchId, user_id, status })
+      await supabase
+        .from('availability')
+        .insert({ match_id: matchId, user_id: userId, status })
     }
 
     setAvailability(prev =>
       existing
-        ? prev.map(a => a.match_id === matchId && a.user_id === userId ? { ...a, status } : a)
-        : [...prev, { match_id: matchId, user_id, status, selection_status: null }]
+        ? prev.map(a => (a.match_id === matchId && a.user_id === userId ? { ...a, status } : a))
+        : [...prev, { match_id: matchId, user_id: userId, status, selection_status: null }]
     )
   }
 
-  const getStatus = (matchId: string) => availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
-  const getSelectionStatus = (matchId: string) => availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
+  const getStatus = (matchId: string) =>
+    availability.find(a => a.match_id === matchId && a.user_id === userId)?.status
+
+  const getSelectionStatus = (matchId: string) =>
+    availability.find(a => a.match_id === matchId && a.user_id === userId)?.selection_status
 
   const showComposition = async (matchId: string, matchName: string) => {
     const { data } = await supabase
@@ -120,31 +126,31 @@ export default function DashboardJoueur({ teamId }: Props) {
     }
   }
 
-  const renderMatchCard = (m: Match, editable: boolean) => {
+  const renderMatch = (m: Match, editable: boolean) => {
     const status = getStatus(m.id)
     const selection = getSelectionStatus(m.id)
 
     return (
-      <div key={m.id} className="bg-gray-800 border border-gray-600 rounded-lg p-4 shadow hover:shadow-lg transition flex flex-col gap-3">
-        <div className="flex justify-between items-start sm:items-center flex-wrap gap-2">
+      <div key={m.id} className="p-4 rounded-lg border border-gray-700 bg-gray-800 shadow hover:shadow-lg transition">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h4 className="font-bold text-lg text-yellow-400">{m.opponent}</h4>
-            <p className="text-gray-300 text-sm">{m.match_date} — {m.match_time} ({m.location_type})</p>
+            <div className="font-bold text-lg text-yellow-400">{m.opponent}</div>
+            <div className="text-gray-200">{m.match_date} — {m.match_time} ({m.location_type})</div>
           </div>
           {m.clubaddress && (
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
               target="_blank"
               rel="noreferrer"
-              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm"
+              className="mt-2 sm:mt-0 px-2 py-1 text-white rounded hover:text-yellow-400"
             >
-              📍 Adresse
+              📍
             </a>
           )}
         </div>
 
         {editable && (
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               onClick={() => setStatus(m.id, 'available')}
               className={`px-3 py-1 rounded font-bold ${status === 'available' ? 'bg-green-400 text-black' : 'bg-gray-700 hover:bg-green-300'}`}
@@ -160,16 +166,16 @@ export default function DashboardJoueur({ teamId }: Props) {
           </div>
         )}
 
-        {status && <p className="text-gray-200 text-sm mt-1">Statut actuel : {status}</p>}
+        {status && <div className="text-sm mt-2 text-gray-100">Statut actuel : {status}</div>}
 
         {m.composition_validated && (
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="text-green-300 text-sm font-bold">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-green-200 text-sm font-bold">
               Composition validée — {selection === 'selected' ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
             </span>
             <button
+              className="px-2 py-1 text-black bg-yellow-400 rounded hover:bg-yellow-300 text-sm"
               onClick={() => showComposition(m.id, m.opponent)}
-              className="px-2 py-1 bg-yellow-400 text-black rounded hover:bg-yellow-300 text-sm"
             >
               Voir composition
             </button>
@@ -179,7 +185,7 @@ export default function DashboardJoueur({ teamId }: Props) {
     )
   }
 
-  if (loading) return <div className="p-6 text-white">Chargement...</div>
+  if (loading) return <div className="text-white p-6">Chargement...</div>
 
   // Catégorisation des matchs
   const matchesEnAttente = matches.filter(m => !m.composition_validated)
@@ -191,27 +197,26 @@ export default function DashboardJoueur({ teamId }: Props) {
       {matchesEnAttente.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-orange-400">Matchs en attente</h3>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">{matchesEnAttente.map(m => renderMatchCard(m, true))}</div>
+          {matchesEnAttente.map(m => renderMatch(m, true))}
         </div>
       )}
 
       {mesMatchs.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-green-400">Mes matchs</h3>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">{mesMatchs.map(m => renderMatchCard(m, false))}</div>
+          {mesMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
 
       {autresMatchs.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-red-400">Autres matchs</h3>
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">{autresMatchs.map(m => renderMatchCard(m, false))}</div>
+          {autresMatchs.map(m => renderMatch(m, false))}
         </div>
       )}
 
-      {matches.length === 0 && <p className="text-gray-300">Aucun match pour le moment</p>}
+      {matches.length === 0 && <div>Aucun match pour le moment</div>}
 
-      {/* Modal composition */}
       {modal.visible && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-gray-800 p-6 rounded max-h-[80vh] overflow-y-auto w-[90%] max-w-xl">
