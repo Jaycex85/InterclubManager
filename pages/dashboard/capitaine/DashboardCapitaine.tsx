@@ -136,8 +136,8 @@ export default function DashboardCapitaine({ teamId, teamName }: Props) {
                 setTimeout(() => setLoading(false), 100)
               }}
               onClose={() => setOpenMatchId(null)}
-              teamId={teamId} // On force toujours l'équipe du capitaine
-              teamName={teamName} // Affichage du nom de l'équipe
+              teamId={teamId} 
+              teamName={teamName} 
             />
           </div>
         </div>
