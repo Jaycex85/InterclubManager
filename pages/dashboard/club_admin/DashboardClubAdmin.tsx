@@ -306,14 +306,24 @@ function AddPlayerForm({
   users,
   roles,
   clubMemberships
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  users: ClubUser[]
-  roles: Roles
-  clubMemberships: ClubMembership[]
-}) {
+}: 
+                      <AddPlayerForm 
+  team={team} 
+  members={members} 
+  setMembers={setMembers} 
+  users={users.filter(u => roles.admin ? true : clubMemberships.some(cm => cm.club_id === team.club_id))} 
+  roles={roles} 
+  clubMemberships={clubMemberships} 
+/>
+
+<AssignCaptainForm 
+  team={team} 
+  members={members} 
+  setMembers={setMembers} 
+  usersById={usersById} 
+  roles={roles} 
+  clubMemberships={clubMemberships} 
+/>) {
   const [selectedUserId, setSelectedUserId] = useState("")
 
   // Filtre les joueurs disponibles selon le club et déjà dans l'équipe
