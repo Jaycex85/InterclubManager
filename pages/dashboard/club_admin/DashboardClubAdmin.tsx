@@ -5,6 +5,7 @@ import { supabase } from '../../../utils/supabaseClient'
 import { FiEdit } from 'react-icons/fi'
 import { MdPeople } from 'react-icons/md'
 
+// ------------------- Types -------------------
 type Roles = { admin: boolean; club_admin: boolean }
 type ClubMembership = { club_id: string; club_name: string; role: "club_admin" | "player" }
 type Team = { id: string; name: string; category: string; gender: string; club_id: string; captain_id?: string }
@@ -13,6 +14,7 @@ type TeamMember = { team_id: string; user_id: string; role: "player" | "captain"
 
 type Props = { roles: Roles; clubMemberships: ClubMembership[] }
 
+// ------------------- Dashboard -------------------
 export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   const [loading, setLoading] = useState(true)
   const [teams, setTeams] = useState<Team[]>([])
@@ -168,10 +170,10 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
               roles={roles}
               clubMemberships={clubMemberships}
               users={users}
-              onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
-              onSaved={() => { setIsModalOpen(false); setTeamToEdit(undefined); setLoading(true); setTimeout(() => setLoading(false), 100) }}
               members={members}
               setMembers={setMembers}
+              onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
+              onSaved={() => { setIsModalOpen(false); setTeamToEdit(undefined); setLoading(true); setTimeout(() => setLoading(false), 100) }}
             />
           </div>
         </div>
