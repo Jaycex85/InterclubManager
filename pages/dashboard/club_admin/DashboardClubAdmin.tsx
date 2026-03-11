@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState, useMemo } from "react"
-import { supabase } from '../../../utils/supabaseClient'
+import { supabase } from "../../../utils/supabaseClient"
 import { FiEdit } from 'react-icons/fi'
 import { MdPeople } from 'react-icons/md'
 
 type Roles = { admin: boolean; club_admin: boolean }
 type ClubMembership = { club_id: string; club_name: string; role: "club_admin" | "player" }
-type Team = { id: string; name: string; category: string; gender: string; club_id: string }
+type Team = { id: string; name: string; category: string; gender: string; club_id: string; captain_id?: string }
 type ClubUser = { id: string; first_name: string; last_name: string; email: string }
 type TeamMember = { team_id: string; user_id: string; role: "player" | "captain" }
 
@@ -18,6 +18,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   const [teams, setTeams] = useState<Team[]>([])
   const [members, setMembers] = useState<TeamMember[]>([])
   const [users, setUsers] = useState<ClubUser[]>([])
+  const [clubs, setClubs] = useState<{id: string, name: string}[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [teamToEdit, setTeamToEdit] = useState<Team | undefined>(undefined)
 
@@ -27,44 +28,52 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
     return map
   }, [users])
 
-  // ------------------- Fetch Data -------------------
+  const clubsById = useMemo(() => {
+    const map: Record<string, {id: string; name: string}> = {}
+    clubs.forEach(c => map[c.id] = c)
+    return map
+  }, [clubs])
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
       try {
-        const clubIds = roles.admin
-          ? (await supabase.from("clubs").select("id")).data?.map(c => c.id) || []
-          : clubMemberships.map(c => c.club_id)
+        // --- Clubs ---
+        let clubIds: string[] = []
+        if (roles.admin) {
+          const { data: allClubs } = await supabase.from("clubs").select("*")
+          clubsById && allClubs && setClubs(allClubs)
+          clubIds = allClubs?.map(c => c.id) || []
+        } else if (roles.club_admin) {
+          clubIds = clubMemberships.map(c => c.club_id)
+          setClubs(clubMemberships.map(c => ({id: c.club_id, name: c.club_name})))
+        }
 
-        // Teams
-        const { data: teamsData, error: teamsError } = await supabase
+        // --- Teams ---
+        const { data: teamsData } = await supabase
           .from("teams")
           .select("*")
           .in("club_id", clubIds)
-          .order("name")
-        if (teamsError) throw teamsError
         setTeams(teamsData || [])
 
-        // Team members
-        const teamIds = (teamsData || []).map(t => t.id)
+        // --- Members ---
+        const teamIds = teamsData?.map(t => t.id) || []
         if (teamIds.length > 0) {
-          const { data: membersData, error: membersError } = await supabase
+          const { data: membersData } = await supabase
             .from("team_memberships")
             .select("*")
             .in("team_id", teamIds)
-          if (membersError) throw membersError
           setMembers(membersData || [])
         }
 
-        // Club users
-        const { data: clubUsersData, error: usersError } = await supabase
+        // --- Club users ---
+        const { data: clubUsersData } = await supabase
           .from("club_memberships")
           .select("user_id, users(id, first_name, last_name, email)")
           .in("club_id", clubIds)
-        if (usersError) throw usersError
 
         const usersMap: Record<string, ClubUser> = {}
-        ;(clubUsersData || []).forEach((m: any) => {
+        (clubUsersData || []).forEach((m: any) => {
           if (m.users) {
             usersMap[m.users.id] = {
               id: m.users.id,
@@ -76,7 +85,7 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
         })
         setUsers(Object.values(usersMap))
       } catch (err) {
-        console.error("Erreur dashboard:", err)
+        console.error(err)
       }
       setLoading(false)
     }
@@ -85,7 +94,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
   if (loading) return <div>Chargement des équipes et joueurs...</div>
 
-  // ------------------- Render -------------------
   return (
     <div className="space-y-6">
 
@@ -103,14 +111,15 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
 
       {/* Teams Grid */}
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {teams.length === 0 && (
+          <div className="text-gray-400 col-span-full text-center py-6">Aucune équipe</div>
+        )}
         {teams
-          .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+          .sort((a,b) => a.name.localeCompare(b.name))
           .map(team => {
             const teamMembers = members.filter(m => m.team_id === team.id)
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
-                
-                {/* Header */}
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-yellow-400 flex items-center gap-1">
                     <MdPeople /> {team.name}
@@ -124,8 +133,9 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                     </button>
                   )}
                 </div>
-
-                <p className="text-gray-300 text-sm mb-2">{team.category} - {team.gender}</p>
+                <p className="text-gray-300 text-sm mb-2">
+                  {team.category} - {team.gender} - {clubsById[team.club_id]?.name || "(Club inconnu)"}
+                </p>
 
                 {/* Members */}
                 <div className="space-y-1 mb-2">
@@ -138,12 +148,11 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                           <button
                             className="text-red-400 hover:text-red-600"
                             onClick={async () => {
-                              const { error } = await supabase
-                                .from("team_memberships")
+                              await supabase.from("team_memberships")
                                 .delete()
                                 .eq("team_id", tm.team_id)
                                 .eq("user_id", tm.user_id)
-                              if (!error) setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
+                              setMembers(prev => prev.filter(m => !(m.team_id === tm.team_id && m.user_id === tm.user_id)))
                             }}
                           >
                             Supprimer
@@ -153,29 +162,31 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
                     )
                   })}
                 </div>
-
-                {/* Forms */}
-                {(roles.admin || roles.club_admin) && (
-                  <div className="flex flex-col gap-2 mt-2">
-                    <AddPlayerForm team={team} members={members} setMembers={setMembers} users={users} />
-                    <AssignCaptainForm team={team} members={members} setMembers={setMembers} usersById={usersById} />
-                  </div>
-                )}
               </div>
             )
-          })}
+          })
+        }
       </div>
 
       {/* Team Modal */}
       {isModalOpen && (
         <TeamModal
           isOpen={isModalOpen}
-          onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
           teamToEdit={teamToEdit}
-          users={users}
           roles={roles}
           clubMemberships={clubMemberships}
-          onSaved={() => setIsModalOpen(false)}
+          users={users}
+          clubs={clubs}
+          onClose={() => { setIsModalOpen(false); setTeamToEdit(undefined) }}
+          onSaved={(savedTeam: Team) => {
+            setTeams(prev => {
+              const idx = prev.findIndex(t => t.id === savedTeam.id)
+              if (idx !== -1) prev[idx] = savedTeam
+              else prev.push(savedTeam)
+              return [...prev]
+            })
+            setIsModalOpen(false)
+          }}
         />
       )}
 
@@ -183,191 +194,111 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   )
 }
 
-// ------------------- Team Modal -------------------
-function TeamModal({
-  isOpen,
-  onClose,
-  onSaved,
-  teamToEdit,
-  roles,
-  clubMemberships,
-  users
-}: {
+// -------------------- TeamModal --------------------
+type TeamModalProps = {
   isOpen: boolean
   onClose: () => void
-  onSaved: () => void
+  onSaved: (team: Team) => void
   teamToEdit?: Team
   roles: Roles
   clubMemberships: ClubMembership[]
   users: ClubUser[]
-}) {
+  clubs: {id: string, name: string}[]
+}
 
-  if (!isOpen) return null
+function TeamModal({ isOpen, onClose, onSaved, teamToEdit, roles, clubMemberships, users, clubs }: TeamModalProps) {
 
   const isNew = !teamToEdit
-
   const [name, setName] = useState(teamToEdit?.name || "")
   const [category, setCategory] = useState(teamToEdit?.category || "")
   const [gender, setGender] = useState(teamToEdit?.gender || "")
-  const [clubId, setClubId] = useState(teamToEdit?.club_id || clubMemberships[0]?.club_id || "")
-  const [captainId, setCaptainId] = useState<string | null>(null)
+  const [clubId, setClubId] = useState(teamToEdit?.club_id || "")
+  const [captainId, setCaptainId] = useState<string | null>(teamToEdit?.captain_id || null)
 
-  const clubPlayers = users  // tous les users du club pour le dropdown capitaine
+  useEffect(() => {
+    setName(teamToEdit?.name || "")
+    setCategory(teamToEdit?.category || "")
+    setGender(teamToEdit?.gender || "")
+    setClubId(teamToEdit?.club_id || (roles.club_admin && !roles.admin && clubMemberships.length === 1 ? clubMemberships[0].club_id : ""))
+    setCaptainId(teamToEdit?.captain_id || null)
+  }, [teamToEdit, roles, clubMemberships])
 
-  const handleSubmit = async () => {
-    const payload = {
-      name,
-      category,
-      gender,
-      club_id: clubId,
-      captain_id: captainId
-    }
+  const clubOptions = useMemo(() => {
+    if (roles.admin) return clubs
+    if (roles.club_admin) return clubMemberships.map(c => ({id: c.club_id, name: c.club_name}))
+    return []
+  }, [roles, clubs, clubMemberships])
 
+  const clubReadonly = roles.club_admin && !roles.admin && clubMemberships.length === 1
+
+  const teamPlayers = useMemo(() => {
+    if (!clubId) return []
+    return users.filter(u => {
+      return clubMemberships.some(c => c.club_id === clubId) // user belongs to club
+    })
+  }, [users, clubId, clubMemberships])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const payload: any = { name, category, gender, club_id: clubId || null, captain_id: captainId || null }
+    let savedTeam: Team | null = null
     if (isNew) {
       const { data, error } = await supabase.from("teams").insert([payload]).select().single()
-      if (!error && data) {
-        onSaved()
-      }
+      if (!error && data) savedTeam = data
     } else {
-      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit.id)
-      if (!error && data) {
-        onSaved()
-      }
+      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit?.id).select().single()
+      if (!error && data) savedTeam = data
     }
+    if (savedTeam) onSaved(savedTeam)
   }
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md shadow-xl">
-        <h3 className="text-xl font-bold text-yellow-400 mb-4">{isNew ? "Créer une nouvelle équipe" : "Modifier l'équipe"}</h3>
+      <form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-lg w-full max-w-md space-y-4 shadow-xl">
+        <h3 className="text-xl font-bold text-yellow-400">{isNew ? "Créer une équipe" : "Modifier l'équipe"}</h3>
 
-        <div className="mb-2">
-          <label className="block mb-1">Nom</label>
-          <input className="w-full p-2 rounded bg-gray-700 text-white" value={name} onChange={e => setName(e.target.value)} />
-        </div>
+        {/* Nom */}
+        <input className="w-full p-2 rounded bg-gray-700 text-white" placeholder="Nom" value={name} onChange={e => setName(e.target.value)} required />
 
-        <div className="mb-2">
-          <label className="block mb-1">Catégorie</label>
-          <input className="w-full p-2 rounded bg-gray-700 text-white" value={category} onChange={e => setCategory(e.target.value)} />
-        </div>
-
-        <div className="mb-2">
-          <label className="block mb-1">Genre</label>
-          <select className="w-full p-2 rounded bg-gray-700 text-white" value={gender} onChange={e => setGender(e.target.value)}>
-            <option value="">-- Sélectionner --</option>
-            <option value="men">Hommes</option>
-            <option value="women">Femmes</option>
-            <option value="mixed">Mixte</option>
-          </select>
-        </div>
-
-        <div className="mb-2">
-          <label className="block mb-1">Capitaine</label>
-          <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
-            <option value="">-- Aucun --</option>
-            {clubPlayers.map(u => (
-              <option key={u.id} value={u.id}>{u.first_name} {u.last_name} - {u.email}</option>
+        {/* Club */}
+        {clubReadonly ? (
+          <input className="w-full p-2 rounded bg-gray-700 text-white" value={clubMemberships[0].club_name} disabled />
+        ) : (
+          <select className="w-full p-2 rounded bg-gray-700 text-white" value={clubId} onChange={e => setClubId(e.target.value)} required>
+            <option value="">-- Sélectionner un club --</option>
+            {clubOptions.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+        )}
+
+        {/* Catégorie */}
+        <input className="w-full p-2 rounded bg-gray-700 text-white" placeholder="Catégorie" value={category} onChange={e => setCategory(e.target.value)} />
+
+        {/* Genre */}
+        <select className="w-full p-2 rounded bg-gray-700 text-white" value={gender} onChange={e => setGender(e.target.value)}>
+          <option value="">-- Sélectionner --</option>
+          <option value="men">Hommes</option>
+          <option value="women">Femmes</option>
+          <option value="mixed">Mixte</option>
+        </select>
+
+        {/* Capitaine */}
+        <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
+          <option value="">-- Aucun capitaine --</option>
+          {teamPlayers.map(u => (
+            <option key={u.id} value={u.id}>{[u.last_name, u.first_name].filter(Boolean).join(' ')} - {u.email}</option>
+          ))}
+        </select>
+
+        {/* Buttons */}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500">Annuler</button>
+          <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">{isNew ? "Créer" : "Enregistrer"}</button>
         </div>
-
-        <div className="flex justify-end gap-2 mt-4">
-          <button className="px-4 py-2 bg-gray-600 rounded hover:bg-gray-500" onClick={onClose}>Annuler</button>
-          <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white font-bold" onClick={handleSubmit}>{isNew ? "Créer" : "Enregistrer"}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------- Add Player Form ----------------------
-function AddPlayerForm({
-  team,
-  members,
-  setMembers,
-  users
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  users: ClubUser[]
-}) {
-  const [selectedUserId, setSelectedUserId] = useState("")
-  const availableUsers = users.filter(u => !members.some(m => m.team_id === team.id && m.user_id === u.id))
-
-  const handleAdd = async () => {
-    if (!selectedUserId) return
-    const { error } = await supabase
-      .from("team_memberships")
-      .insert({ team_id: team.id, user_id: selectedUserId, role: "player" })
-    if (!error) {
-      setMembers(prev => [...prev, { team_id: team.id, user_id: selectedUserId, role: "player" }])
-      setSelectedUserId("")
-    }
-  }
-
-  return (
-    <div className="flex gap-2 flex-wrap">
-      <select className="bg-gray-700 text-white p-1 rounded" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
-        <option value="">Sélectionner un joueur</option>
-        {availableUsers.map(u => (
-          <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-        ))}
-      </select>
-      <button className="bg-green-600 hover:bg-green-700 px-2 rounded" onClick={handleAdd}>Ajouter</button>
-    </div>
-  )
-}
-
-// ---------------------- Assign Captain Form ----------------------
-function AssignCaptainForm({
-  team,
-  members,
-  setMembers,
-  usersById
-}: {
-  team: Team
-  members: TeamMember[]
-  setMembers: React.Dispatch<React.SetStateAction<TeamMember[]>>
-  usersById: Record<string, ClubUser>
-}) {
-  const [selectedCaptainId, setSelectedCaptainId] = useState("")
-  const teamPlayers = members.filter(m => m.team_id === team.id)
-  const currentCaptain = teamPlayers.find(m => m.role === "captain")
-
-  const handleAssign = async () => {
-    if (!selectedCaptainId) return
-    if (currentCaptain) {
-      await supabase.from("team_memberships")
-        .update({ role: "player" })
-        .eq("team_id", team.id)
-        .eq("user_id", currentCaptain.user_id)
-    }
-    await supabase.from("team_memberships")
-      .update({ role: "captain" })
-      .eq("team_id", team.id)
-      .eq("user_id", selectedCaptainId)
-
-    setMembers(prev =>
-      prev.map(m =>
-        m.team_id === team.id
-          ? m.user_id === selectedCaptainId ? { ...m, role: "captain" } : { ...m, role: "player" }
-          : m
-      )
-    )
-    setSelectedCaptainId("")
-  }
-
-  return (
-    <div className="flex gap-2 flex-wrap">
-      <select className="bg-gray-700 text-white p-1 rounded" value={selectedCaptainId} onChange={e => setSelectedCaptainId(e.target.value)}>
-        <option value="">Sélectionner capitaine</option>
-        {teamPlayers.map(m => {
-          const user = usersById[m.user_id]
-          return <option key={m.user_id} value={m.user_id}>{user ? `${user.first_name} ${user.last_name}` : m.user_id}</option>
-        })}
-      </select>
-      <button className="bg-yellow-600 hover:bg-yellow-700 px-2 rounded" onClick={handleAssign}>Assigner</button>
+      </form>
     </div>
   )
 }
