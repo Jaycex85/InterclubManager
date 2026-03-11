@@ -93,13 +93,15 @@ export default function MatchForm({ matchId, teamId, teamName, onSaved, onClose 
             className="mb-2 w-full p-2 rounded bg-gray-700 text-white"
           />
 
-          <input
-            type="text"
-            placeholder="Type de lieu"
-            value={locationType}
-            onChange={(e) => setLocationType(e.target.value)}
-            className="mb-2 w-full p-2 rounded bg-gray-700 text-white"
-          />
+          <select
+  value={locationType}
+  onChange={(e) => setLocationType(e.target.value)}
+  className="mb-2 w-full p-2 rounded bg-gray-700 text-white"
+>
+  <option value="">Type de lieu</option>
+  <option value="Domicile">Domicile</option>
+  <option value="Extérieur">Extérieur</option>
+</select>
 
           <input
             type="text"
