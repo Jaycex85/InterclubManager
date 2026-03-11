@@ -125,98 +125,120 @@ export default function DashboardJoueur({ teamId, teamName }: Props) {
 
   if (loading) return <div className="text-white p-6">Chargement...</div>
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-gray-800 p-4 rounded-lg shadow-md">
-        <div className="flex items-center gap-2">
-          <MdSportsTennis className="text-yellow-400" size={28} />
-          <h1 className="text-2xl font-bold text-white">{teamName}</h1>
-        </div>
-      </div>
+  // Catégorisation des matchs
+  const matchesPending = matches.filter(m => !m.composition_validated)
+  const matchesSelected = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) === 'selected')
+  const matchesNotSelected = matches.filter(m => m.composition_validated && getSelectionStatus(m.id) !== 'selected')
 
-      {/* Matches Grid */}
-      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {matches.length === 0 && (
-          <div className="text-gray-400 col-span-full text-center py-6">Aucun match pour cette équipe</div>
-        )}
+  const renderMatchCard = (m: Match, isPending: boolean) => {
+    const status = getStatus(m.id)
+    const selection = getSelectionStatus(m.id)
+    const isSelected = selection === 'selected'
+    const isNotSelected = selection === 'not_selected'
 
-        {matches.map(m => {
-          const status = getStatus(m.id)
-          const selection = getSelectionStatus(m.id)
-          const compositionValidated = m.composition_validated
+    const borderColor = isPending
+      ? 'border-orange-400'
+      : isSelected
+        ? 'border-green-400'
+        : 'border-red-400'
 
-          return (
-            <div
-              key={m.id}
-              className="bg-gray-700 hover:bg-gray-600 rounded-lg shadow-md p-4 flex flex-col justify-between transition"
+    const badgeText = isPending
+      ? 'En attente'
+      : isSelected
+        ? 'Sélectionné'
+        : 'Non sélectionné'
+
+    const badgeColor = isPending
+      ? 'bg-orange-400 text-black'
+      : isSelected
+        ? 'bg-green-400 text-black'
+        : 'bg-red-400 text-white'
+
+    return (
+      <div key={m.id} className={`p-4 rounded-lg border-2 ${borderColor} bg-gray-800 shadow hover:shadow-lg transition flex flex-col justify-between`}>
+        <div className={`inline-block px-2 py-1 rounded-full font-bold text-xs ${badgeColor}`}>{badgeText}</div>
+
+        <div className="mt-2 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+          <div>
+            <p className="text-white font-semibold text-lg">{m.match_date} {m.match_time}</p>
+            <p className="text-gray-300 font-medium">{m.opponent} ({m.location_type})</p>
+          </div>
+          {m.clubaddress && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 sm:mt-0 flex items-center gap-1 text-blue-400 font-medium"
             >
-              {/* Match Info */}
-              <div className="mb-3">
-                <p className="text-white font-semibold text-lg">{m.match_date} {m.match_time}</p>
-                <p className="text-gray-300 font-medium">{m.opponent} ({m.location_type})</p>
-                {m.clubaddress && (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(m.clubaddress)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-blue-400 mt-1 font-medium"
-                  >
-                    <FiMapPin /> Voir sur carte
-                  </a>
-                )}
-                {compositionValidated && (
-                  <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold text-green-800 bg-green-200 rounded-full">
-                    Composition validée
-                  </span>
-                )}
-              </div>
+              <FiMapPin /> Voir sur carte
+            </a>
+          )}
+        </div>
 
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row sm:justify-end gap-2 mt-2">
-                {!compositionValidated && (
-                  <>
-                    <button
-                      onClick={() => setStatus(m.id, 'available')}
-                      className={`px-3 py-1 rounded font-semibold transition ${
-                        status === 'available'
-                          ? 'bg-green-400 text-black'
-                          : 'bg-gray-700 hover:bg-green-300 text-white'
-                      }`}
-                    >
-                      Disponible
-                    </button>
-                    <button
-                      onClick={() => setStatus(m.id, 'unavailable')}
-                      className={`px-3 py-1 rounded font-semibold transition ${
-                        status === 'unavailable'
-                          ? 'bg-red-400 text-black'
-                          : 'bg-gray-700 hover:bg-red-300 text-white'
-                      }`}
-                    >
-                      Indisponible
-                    </button>
-                  </>
-                )}
-                {compositionValidated && (
-                  <button
-                    onClick={() => showComposition(m.id)}
-                    className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-semibold transition"
-                  >
-                    Voir composition
-                  </button>
-                )}
-              </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {isPending && (
+            <>
+              <button
+                onClick={() => setStatus(m.id, 'available')}
+                className={`px-3 py-1 rounded font-semibold transition ${status === 'available' ? 'bg-green-400 text-black' : 'bg-gray-700 hover:bg-green-300 text-white'}`}
+              >
+                Disponible
+              </button>
+              <button
+                onClick={() => setStatus(m.id, 'unavailable')}
+                className={`px-3 py-1 rounded font-semibold transition ${status === 'unavailable' ? 'bg-red-400 text-black' : 'bg-gray-700 hover:bg-red-300 text-white'}`}
+              >
+                Indisponible
+              </button>
+            </>
+          )}
+          {!isPending && (
+            <button
+              onClick={() => showComposition(m.id)}
+              className="px-3 py-1 bg-blue-500 hover:bg-blue-400 text-white rounded font-semibold transition"
+            >
+              Voir composition
+            </button>
+          )}
+        </div>
 
-              {compositionValidated && status && (
-                <div className="mt-2 text-gray-100 text-sm">
-                  {selection === 'selected' ? 'Vous êtes sélectionné' : 'Vous n’êtes pas sélectionné'}
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {!isPending && (
+          <div className="mt-2 text-sm font-bold">
+            {isSelected ? <span className="text-green-400">Vous êtes sélectionné</span> : <span className="text-red-400">Vous n’êtes pas sélectionné</span>}
+          </div>
+        )}
       </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {matchesPending.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-orange-400 mb-2">Matchs en attente</h2>
+          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {matchesPending.map(m => renderMatchCard(m, true))}
+          </div>
+        </div>
+      )}
+
+      {matchesSelected.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-green-400 mb-2">Mes matchs</h2>
+          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {matchesSelected.map(m => renderMatchCard(m, false))}
+          </div>
+        </div>
+      )}
+
+      {matchesNotSelected.length > 0 && (
+        <div>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Autres matchs</h2>
+          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {matchesNotSelected.map(m => renderMatchCard(m, false))}
+          </div>
+        </div>
+      )}
 
       {/* Modal Composition */}
       {openCompositionId && (
