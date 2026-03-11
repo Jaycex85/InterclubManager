@@ -102,7 +102,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
   // ------------------- Render -------------------
   return (
     <div className="space-y-6">
-
       {/* Header + Nouvelle équipe */}
       {(roles.admin || roles.club_admin) && (
         <div className="flex justify-end">
@@ -123,7 +122,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
             const teamMembers = members.filter(m => m.team_id === team.id)
             return (
               <div key={team.id} className="bg-gray-800 rounded-lg p-4 border border-gray-600 shadow hover:shadow-lg transition flex flex-col justify-between">
-                
                 {/* Header */}
                 <div className="flex justify-between items-center mb-2">
                   <h2 className="text-lg font-bold text-yellow-400 flex items-center gap-1">
@@ -216,7 +214,6 @@ export default function DashboardClubAdmin({ roles, clubMemberships }: Props) {
           </div>
         </div>
       )}
-
     </div>
   )
 }
@@ -245,19 +242,15 @@ function TeamForm({
   const [category, setCategory] = useState(teamToEdit?.category || "")
   const [gender, setGender] = useState(teamToEdit?.gender || "")
   const [clubId, setClubId] = useState(teamToEdit?.club_id || (roles.club_admin ? clubMemberships[0]?.club_id : allClubs[0]?.id) || "")
-  const [captainId, setCaptainId] = useState<string | null>(teamToEdit?.captain_id || null)
-
-  const clubPlayers = users.filter(u =>
-    roles.admin ? true : clubMemberships.some(cm => cm.club_id === clubId)
-  )
 
   const handleSubmit = async () => {
-    const payload = { name, category, gender, club_id: clubId, captain_id: captainId }
+    const payload = { name, category, gender, club_id: clubId } // Plus de captain_id
+
     if (isNew) {
       const { data, error } = await supabase.from("teams").insert([payload]).select().single()
       if (!error && data) onSaved()
     } else {
-      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit.id)
+      const { data, error } = await supabase.from("teams").update(payload).eq("id", teamToEdit!.id)
       if (!error && data) onSaved()
     }
   }
@@ -289,13 +282,6 @@ function TeamForm({
           </select>
         </div>
       )}
-      <div>
-        <label className="block mb-1">Capitaine</label>
-        <select className="w-full p-2 rounded bg-gray-700 text-white" value={captainId || ""} onChange={e => setCaptainId(e.target.value)}>
-          <option value="">-- Aucun --</option>
-          {clubPlayers.map(u => <option key={u.id} value={u.id}>{u.first_name} {u.last_name} - {u.email}</option>)}
-        </select>
-      </div>
       <div className="flex justify-end gap-2 mt-2">
         <button className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 text-white font-bold" onClick={handleSubmit}>{isNew ? "Créer" : "Enregistrer"}</button>
       </div>
