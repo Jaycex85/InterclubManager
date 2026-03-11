@@ -45,23 +45,28 @@ export default function MatchForm({ matchId, teamId, teamName, onSaved, onClose 
   }, [matchId])
 
   const handleSave = async () => {
-    setLoading(true)
-    const { error } = await supabase
-      .from('matches')
-      .upsert({
-        id: matchId,
-        team_id: teamId,
-        opponent,
-        match_date: matchDate,
-        match_time: matchTime,
-        location_type: locationType,
-        clubaddress: clubAddress
-      })
+  setLoading(true)
 
-    if (error) console.error(error)
-    else onSaved()
-    setLoading(false)
-  }
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { error } = await supabase
+    .from('matches')
+    .upsert({
+      id: matchId,
+      team_id: teamId,
+      opponent,
+      match_date: matchDate,
+      match_time: matchTime,
+      location_type: locationType,
+      clubaddress: clubAddress,
+      created_by: user?.id
+    })
+
+  if (error) console.error(error)
+  else onSaved()
+
+  setLoading(false)
+}
 
   return (
     <div>
